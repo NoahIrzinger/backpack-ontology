@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "backpack": {
+      "command": "npx",
+      "args": ["tsx", "src/bin/backpack.ts"]
+    }
+  }
+}
