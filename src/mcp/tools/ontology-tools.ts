@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
+import { trackEvent } from "../../core/telemetry.js";
 
 export function registerOntologyTools(
   server: McpServer,
@@ -16,6 +17,7 @@ export function registerOntologyTools(
     },
     async () => {
       const ontologies = await backpack.listOntologies();
+      trackEvent("tool_call", { tool: "backpack_list" });
       return {
         content: [
           {
@@ -52,6 +54,7 @@ export function registerOntologyTools(
     async ({ name, description }) => {
       try {
         const metadata = await backpack.createOntology(name, description);
+        trackEvent("tool_call", { tool: "backpack_create" });
         return {
           content: [
             {
@@ -85,6 +88,7 @@ export function registerOntologyTools(
     async ({ ontology }) => {
       try {
         await backpack.deleteOntology(ontology);
+        trackEvent("tool_call", { tool: "backpack_delete" });
         return {
           content: [
             {
@@ -118,6 +122,7 @@ export function registerOntologyTools(
     async ({ ontology }) => {
       try {
         const info = await backpack.describeOntology(ontology);
+        trackEvent("tool_call", { tool: "backpack_describe" });
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(info, null, 2) },

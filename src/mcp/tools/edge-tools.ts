@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
+import { trackEvent } from "../../core/telemetry.js";
 
 export function registerEdgeTools(
   server: McpServer,
@@ -38,6 +39,7 @@ export function registerEdgeTools(
           targetId,
           (properties as Record<string, unknown>) ?? {}
         );
+        trackEvent("tool_call", { tool: "backpack_add_edge" });
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(edge, null, 2) },
@@ -68,6 +70,7 @@ export function registerEdgeTools(
     async ({ ontology, edgeId }) => {
       try {
         await backpack.removeEdge(ontology, edgeId);
+        trackEvent("tool_call", { tool: "backpack_remove_edge" });
         return {
           content: [
             { type: "text" as const, text: `Removed edge ${edgeId}.` },
@@ -120,6 +123,7 @@ export function registerEdgeTools(
           direction,
           depth
         );
+        trackEvent("tool_call", { tool: "backpack_get_neighbors" });
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(result, null, 2) },

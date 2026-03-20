@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
+import { trackEvent } from "../../core/telemetry.js";
 
 export function registerNodeTools(
   server: McpServer,
@@ -20,6 +21,7 @@ export function registerNodeTools(
     async ({ ontology }) => {
       try {
         const types = await backpack.getNodeTypes(ontology);
+        trackEvent("tool_call", { tool: "backpack_node_types" });
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(types, null, 2) },
@@ -66,6 +68,7 @@ export function registerNodeTools(
     async ({ ontology, type, limit, offset }) => {
       try {
         const result = await backpack.listNodes(ontology, type, limit, offset);
+        trackEvent("tool_call", { tool: "backpack_list_nodes" });
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(result, null, 2) },
@@ -101,6 +104,7 @@ export function registerNodeTools(
     async ({ ontology, query, type }) => {
       try {
         const results = await backpack.searchNodes(ontology, query, type);
+        trackEvent("tool_call", { tool: "backpack_search" });
         return {
           content: [
             {
@@ -138,6 +142,7 @@ export function registerNodeTools(
     async ({ ontology, nodeId }) => {
       try {
         const result = await backpack.getNode(ontology, nodeId);
+        trackEvent("tool_call", { tool: "backpack_get_node" });
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(result, null, 2) },
@@ -181,6 +186,7 @@ export function registerNodeTools(
           type,
           properties as Record<string, unknown>
         );
+        trackEvent("tool_call", { tool: "backpack_add_node" });
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(node, null, 2) },
@@ -218,6 +224,7 @@ export function registerNodeTools(
           nodeId,
           properties as Record<string, unknown>
         );
+        trackEvent("tool_call", { tool: "backpack_update_node" });
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(node, null, 2) },
@@ -249,6 +256,7 @@ export function registerNodeTools(
     async ({ ontology, nodeId }) => {
       try {
         const result = await backpack.removeNode(ontology, nodeId);
+        trackEvent("tool_call", { tool: "backpack_remove_node" });
         return {
           content: [
             {

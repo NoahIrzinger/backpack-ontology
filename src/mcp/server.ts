@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Backpack } from "../core/backpack.js";
 import type { StorageBackend } from "../core/types.js";
 import { JsonFileBackend } from "../storage/json-file-backend.js";
+import { initTelemetry } from "../core/telemetry.js";
 import { registerOntologyTools } from "./tools/ontology-tools.js";
 import { registerNodeTools } from "./tools/node-tools.js";
 import { registerEdgeTools } from "./tools/edge-tools.js";
@@ -19,6 +20,9 @@ export async function createMcpServer(
   const backend = storage ?? new JsonFileBackend();
   const backpack = new Backpack(backend);
   await backpack.initialize();
+
+  // Initialize telemetry (non-blocking, fails silently)
+  try { await initTelemetry(backpack); } catch { /* noop */ }
 
   const server = new McpServer({
     name: "backpack",

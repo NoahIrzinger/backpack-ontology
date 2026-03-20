@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
+import { trackEvent } from "../../core/telemetry.js";
 
 export function registerBulkTools(
   server: McpServer,
@@ -35,6 +36,7 @@ export function registerBulkTools(
             properties: Record<string, unknown>;
           }>
         );
+        trackEvent("tool_call", { tool: "backpack_import_nodes" });
         return {
           content: [
             {
