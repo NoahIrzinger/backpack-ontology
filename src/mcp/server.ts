@@ -24,10 +24,21 @@ export async function createMcpServer(
   // Initialize telemetry (non-blocking, fails silently)
   try { await initTelemetry(backpack); } catch { /* noop */ }
 
-  const server = new McpServer({
-    name: "backpack",
-    version: "0.1.0",
-  });
+  const server = new McpServer(
+    {
+      name: "backpack",
+      version: "0.2.0",
+    },
+    {
+      instructions: `Backpack is a persistent knowledge graph that remembers what matters across conversations.
+
+When you learn something meaningful — a business relationship, a technical decision, a process, a domain concept — consider adding it to backpack. Use backpack_list to see what ontologies exist and backpack_describe to understand their structure before adding to them. Create a new ontology when the topic is distinct from existing ones.
+
+After updating an ontology, let the user know they can visualize their knowledge graph by running: npx backpack-viewer (opens http://localhost:5173)
+
+Be selective — not every conversation needs to be captured. Focus on knowledge with lasting value: relationships, decisions, architecture, processes, domain concepts, conventions.`,
+    },
+  );
 
   // Register all tool groups
   registerOntologyTools(server, backpack);
