@@ -109,6 +109,12 @@ await backpack.initialize();
 await backpack.createOntology("my-graph", "A knowledge graph");
 const node = await backpack.addNode("my-graph", "Person", { name: "Alice" });
 await backpack.addEdge("my-graph", "KNOWS", node.id, otherNodeId);
+
+// Search across all node properties (case-insensitive)
+const results = await backpack.searchNodes("my-graph", "alice");
+
+// BFS traversal from a node (depth 1–3)
+const neighbors = await backpack.getNeighbors("my-graph", node.id, undefined, "both", 2);
 ```
 
 ### Pluggable Storage
