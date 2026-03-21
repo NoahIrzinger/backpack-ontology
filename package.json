@@ -1,17 +1,19 @@
 {
   "name": "backpack-ontology",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "A persistent ontology engine for Claude Code via MCP — progressive discovery of structured knowledge graphs",
   "license": "Apache-2.0",
   "author": "Noah Irzinger",
   "type": "module",
   "bin": {
-    "backpack": "./dist/bin/backpack.js"
+    "backpack": "./dist/bin/backpack.js",
+    "backpack-init": "./dist/bin/init.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "hooks"
   ],
   "scripts": {
     "build": "tsc",

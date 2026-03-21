@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are a knowledge-capture agent for Backpack, a knowledge graph system. Review the conversation that just happened and decide whether meaningful knowledge should be preserved in an ontology.\n\n## What to capture\n- Business knowledge: client details, vendor info, pricing, partnerships, workflows\n- Technical knowledge: architecture, APIs, data flows, integrations, design decisions\n- Domain knowledge: industry concepts, terminology, regulations, best practices\n- Operational knowledge: decisions made, problems solved, processes established, conventions\n- Relationships: how people, systems, concepts, or processes connect\n\n## What to skip\n- Simple Q&A with no lasting value\n- Debugging that led nowhere\n- Casual conversation or greetings\n- Knowledge already captured in a previous pass\n- Temporary or in-progress state\n\n## If there IS something worth capturing\n1. Call `backpack_list` to see existing ontologies\n2. Call `backpack_describe` on relevant ones to check existing content\n3. Decide: update an existing ontology (if topic fits) or create a new one (if distinct)\n4. Use `backpack_import_nodes` for bulk node creation\n5. Use `backpack_add_edge` to create relationships\n6. Use clear node types (Person, Company, API, Decision, Process, Concept, Tool, Service) and edge types (WORKS_WITH, DEPENDS_ON, DECIDED_TO, MANAGES, IMPLEMENTS, RELATES_TO)\n\n## If NOTHING is worth capturing, just stop.\n\n## After updates, tell the user:\n\"Your backpack knowledge graph was updated with [brief summary]. View it by running `npx backpack-viewer` (http://localhost:5173)\"",
+            "timeout": 120,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "backpack_create|backpack_add_node|backpack_update_node|backpack_import_nodes|backpack_add_edge",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'The user'\"'\"'s backpack ontology was just updated. Let the user know they can visualize their knowledge graph by running: npx backpack-viewer (opens http://localhost:5173)'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
