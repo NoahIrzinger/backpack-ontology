@@ -2,22 +2,45 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Backpack } from "../core/backpack.js";
 import type { StorageBackend } from "../core/types.js";
 import { JsonFileBackend } from "../storage/json-file-backend.js";
+import { BackpackAppBackend } from "../storage/backpack-app-backend.js";
 import { initTelemetry } from "../core/telemetry.js";
 import { registerOntologyTools } from "./tools/ontology-tools.js";
 import { registerNodeTools } from "./tools/node-tools.js";
 import { registerEdgeTools } from "./tools/edge-tools.js";
 import { registerBulkTools } from "./tools/bulk-tools.js";
 
+/** Configuration for local file-based storage. */
+export interface BackpackLocalConfig {
+  mode: "local";
+  dataDir?: string;
+}
+
+/** Configuration for Backpack App cloud storage. */
+export interface BackpackAppConfig {
+  mode: "app";
+  url: string;
+  token: string;
+}
+
+export type BackpackServerConfig = BackpackLocalConfig | BackpackAppConfig;
+
 /**
  * Create and configure the MCP server.
  *
- * Pass a custom StorageBackend to use something other than JSON files.
- * If omitted, defaults to JsonFileBackend (~/.backpack/).
+ * Supports two modes:
+ *   - "local" (default): JSON files on disk
+ *   - "app": Backpack App cloud API
  */
 export async function createMcpServer(
-  storage?: StorageBackend
+  config?: BackpackServerConfig
 ): Promise<McpServer> {
-  const backend = storage ?? new JsonFileBackend();
+  let backend: StorageBackend;
+  if (!config || config.mode === "local") {
+    backend = new JsonFileBackend(config?.dataDir);
+  } else {
+    backend = new BackpackAppBackend(config.url, config.token);
+  }
+
   const backpack = new Backpack(backend);
   await backpack.initialize();
 

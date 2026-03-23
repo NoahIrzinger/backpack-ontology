@@ -20,7 +20,6 @@ export type {
   GetNodeResult,
   NeighborResult,
   NeighborEntry,
-  StorageBackend,
 } from "./core/types.js";
 
 // Storage backends
@@ -31,3 +30,4 @@ export { initTelemetry, trackEvent, shutdown as shutdownTelemetry } from "./core
 
 // MCP server factory
 export { createMcpServer } from "./mcp/server.js";
+export type { BackpackServerConfig, BackpackLocalConfig, BackpackAppConfig } from "./mcp/server.js";
