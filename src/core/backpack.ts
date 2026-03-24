@@ -77,6 +77,16 @@ export class Backpack {
     this.graphs.delete(name);
   }
 
+  async renameOntology(oldName: string, newName: string): Promise<void> {
+    await this.storage.renameOntology(oldName, newName);
+    const graph = this.graphs.get(oldName);
+    if (graph) {
+      graph.data.metadata.name = newName;
+      this.graphs.delete(oldName);
+      this.graphs.set(newName, graph);
+    }
+  }
+
   async describeOntology(name: string): Promise<{
     metadata: OntologyMetadata;
     nodeTypes: NodeTypeInfo[];

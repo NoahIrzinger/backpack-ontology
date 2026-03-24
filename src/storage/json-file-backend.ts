@@ -130,6 +130,25 @@ export class JsonFileBackend implements StorageBackend {
     return data;
   }
 
+  async renameOntology(oldName: string, newName: string): Promise<void> {
+    if (!(await this.ontologyExists(oldName))) {
+      throw new Error(`Ontology not found: ${oldName}`);
+    }
+    if (await this.ontologyExists(newName)) {
+      throw new Error(`Ontology already exists: ${newName}`);
+    }
+
+    // Update metadata inside the JSON
+    const data = await this.loadOntology(oldName);
+    data.metadata.name = newName;
+    data.metadata.updatedAt = new Date().toISOString();
+
+    // Create new directory, write data, remove old
+    await fs.mkdir(this.ontologyDir(newName), { recursive: true });
+    await this.saveOntology(newName, data);
+    await fs.rm(this.ontologyDir(oldName), { recursive: true });
+  }
+
   async deleteOntology(name: string): Promise<void> {
     if (!(await this.ontologyExists(name))) {
       throw new Error(`Ontology not found: ${name}`);

@@ -113,5 +113,6 @@ export interface StorageBackend {
   saveOntology(name: string, data: OntologyData): Promise<void>;
   createOntology(name: string, description: string): Promise<OntologyData>;
   deleteOntology(name: string): Promise<void>;
+  renameOntology(oldName: string, newName: string): Promise<void>;
   ontologyExists(name: string): Promise<boolean>;
 }

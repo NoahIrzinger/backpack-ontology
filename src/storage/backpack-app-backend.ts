@@ -86,6 +86,16 @@ export class BackpackAppBackend implements StorageBackend {
     return data;
   }
 
+  async renameOntology(oldName: string, newName: string): Promise<void> {
+    await this.request(
+      `/api/ontologies/${encodeURIComponent(oldName)}/rename`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: newName }),
+      }
+    );
+  }
+
   async deleteOntology(name: string): Promise<void> {
     await this.request(`/api/ontologies/${encodeURIComponent(name)}`, {
       method: "DELETE",
