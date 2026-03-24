@@ -9,7 +9,7 @@ This privacy policy applies only to the open source **backpack-ontology** MCP se
 
 ## Data Storage
 
-In local mode, all ontology data (nodes, edges, properties, names, descriptions) is stored exclusively on your device at `~/.local/share/backpack/ontologies/` (or a custom path if configured). No ontology data is sent to any external server.
+With Backpack Local, all ontology data (nodes, edges, properties, names, descriptions) is stored exclusively on your device at `~/.local/share/backpack/ontologies/` (or a custom path if configured). No ontology data is sent to any external server.
 
 When using Backpack App mode, your data is transmitted to and stored by the Backpack App service. That service's privacy policy governs how your data is handled — not this one.
 

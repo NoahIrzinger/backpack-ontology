@@ -1,6 +1,6 @@
 # Backpack
 
-**Give your AI a memory it can actually use.** Backpack lets Claude remember what matters — your clients, your processes, your decisions — across every conversation.
+**Carry your knowledge forward.** Backpack lets Claude remember what matters — your clients, your processes, your decisions — across every conversation.
 
 ## What it does
 
@@ -22,7 +22,7 @@ No copy-pasting. No re-explaining. Your knowledge carries forward.
 
 ## Get started
 
-### Local mode (free, private, on your machine)
+### Backpack Local (free, private, on your machine)
 
 ```bash
 claude mcp add backpack -s user -- npx backpack-ontology
@@ -90,7 +90,7 @@ You have one backpack — it goes everywhere with you. Inside it, you organize k
 
 ## Data and privacy
 
-**Local mode**: Your data is stored as readable JSON files on your computer at `~/.local/share/backpack/ontologies/`. You can inspect, edit, back up, or version-control these files directly.
+**Backpack Local**: Your data is stored as readable JSON files on your computer at `~/.local/share/backpack/ontologies/`. You can inspect, edit, back up, or version-control these files directly.
 
 **Backpack App**: Your data is stored securely in our cloud infrastructure. See our [privacy policy](https://backpackontology.com/privacy) for details.
 
