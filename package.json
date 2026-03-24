@@ -8,6 +8,7 @@
   "bin": {
     "backpack": "./dist/bin/backpack.js",
     "backpack-app": "./dist/bin/backpack-app.js",
+    "backpack-sync": "./dist/bin/backpack-sync.js",
     "backpack-init": "./dist/bin/init.js"
   },
   "main": "./dist/index.js",

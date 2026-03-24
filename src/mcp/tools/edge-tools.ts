@@ -12,7 +12,7 @@ export function registerEdgeTools(
     {
       title: "Add Edge",
       description:
-        "Create a relationship (edge) between two nodes. The type is freeform (e.g. 'USED_IN', 'DEPENDS_ON', 'KNOWS').",
+        "Create a relationship between two items in an ontology. The type is freeform (e.g. 'WORKS_WITH', 'REPORTS_TO', 'DEPENDS_ON').",
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),
         type: z
@@ -60,7 +60,7 @@ export function registerEdgeTools(
     "backpack_remove_edge",
     {
       title: "Remove Edge",
-      description: "Remove a relationship (edge) between two nodes.",
+      description: "Remove a relationship between two items in an ontology.",
       annotations: { destructiveHint: true },
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),
@@ -92,7 +92,7 @@ export function registerEdgeTools(
     {
       title: "Get Neighbors",
       description:
-        "Traverse the graph from a node. Returns neighbor summaries with connecting edge info. Use depth > 1 to explore further (max 3).",
+        "Explore connections from an item in an ontology. Returns related items with their relationships. Use depth > 1 to follow the chain further (max 3).",
       annotations: { readOnlyHint: true },
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),

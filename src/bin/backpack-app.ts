@@ -1,18 +1,32 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createMcpServer } from "../mcp/server.js";
+import { ensureHooksInstalled } from "../core/hooks.js";
 import { shutdown as shutdownTelemetry } from "../core/telemetry.js";
 
+// Production defaults — users never need to configure these.
+// Env vars override for development/testing only.
+const DEFAULTS = {
+  url: "https://app.backpackontology.com",
+  clientId: "YOUR_ENTRA_CLIENT_ID_HERE",
+  issuerUrl: "https://YOUR_TENANT.ciamlogin.com/YOUR_TENANT_ID/v2.0",
+};
+
 async function main() {
-  const apiUrl = process.env.BACKPACK_APP_URL;
-  const apiToken = process.env.BACKPACK_APP_TOKEN;
+  // Install hooks on first run (silent, non-blocking)
+  ensureHooksInstalled().catch(() => {});
 
-  if (!apiUrl || !apiToken) {
-    console.error("Required env vars: BACKPACK_APP_URL, BACKPACK_APP_TOKEN");
-    process.exit(1);
-  }
+  const apiUrl = process.env.BACKPACK_APP_URL || DEFAULTS.url;
+  const clientId = process.env.BACKPACK_APP_CLIENT_ID || DEFAULTS.clientId;
+  const issuerUrl = process.env.BACKPACK_APP_ISSUER_URL || DEFAULTS.issuerUrl;
+  const staticToken = process.env.BACKPACK_APP_TOKEN;
 
-  const server = await createMcpServer({ mode: "app", url: apiUrl, token: apiToken });
+  const server = await createMcpServer(
+    staticToken
+      ? { mode: "app", url: apiUrl, token: staticToken }
+      : { mode: "app", url: apiUrl, clientId, issuerUrl }
+  );
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
 

@@ -27,9 +27,9 @@ npm install
 ```
 src/
 ├── core/                        # Pure engine — no MCP dependency
-│   ├── types.ts                 # All interfaces (Node, Edge, StorageBackend, etc.)
+│   ├── types.ts                 # All interfaces (Node, Edge, OntologyData, etc.)
 │   ├── graph.ts                 # In-memory graph operations
-│   ├── backpack.ts              # Public API — composes Graph + StorageBackend
+│   ├── backpack.ts              # Public API — composes Graph + storage
 │   ├── paths.ts                 # XDG directory resolution
 │   ├── config.ts                # Configuration loading
 │   └── ids.ts                   # Prefixed nanoid generation (n_ for nodes, e_ for edges)
@@ -53,7 +53,7 @@ The codebase has three layers:
 
 1. **Core engine** (`src/core/`) — Pure data structures and graph operations. Zero knowledge of MCP. Fully testable in isolation.
 
-2. **Storage** (`src/storage/`) — Pluggable persistence via the `StorageBackend` interface. The default `JsonFileBackend` writes human-readable JSON to disk following XDG conventions.
+2. **Storage** (`src/storage/`) — Persistence layer. The default `JsonFileBackend` writes human-readable JSON to disk following XDG conventions.
 
 3. **MCP layer** (`src/mcp/`) — Thin adapter that registers 16 tools and delegates every call to the `Backpack` API. No business logic lives here.
 

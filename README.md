@@ -1,198 +1,137 @@
-# Backpack Ontology
+# Backpack
 
-A persistent knowledge graph engine for Claude Code, delivered as an MCP server. Backpack gives AI agents structured, searchable memory that persists across sessions.
+**Give your AI a memory it can actually use.** Backpack lets Claude remember what matters — your clients, your processes, your decisions — across every conversation.
 
-## Installation
+## What it does
 
-```bash
-npm install -g backpack-ontology
-```
-
-## Setup
-
-Add Backpack to your Claude Code project (`.mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "backpack": {
-      "command": "npx",
-      "args": ["backpack-ontology"]
-    }
-  }
-}
-```
-
-Or register it globally:
-
-```bash
-claude mcp add backpack -- npx backpack-ontology
-```
-
-Restart Claude Code to activate.
-
-## Usage
-
-Backpack organizes knowledge as typed graphs — nodes (entities) connected by edges (relationships). There are no enforced schemas. The LLM decides what structure fits the domain.
+When you're working with Claude and something worth remembering comes up — a relationship, a project decision, a workflow, a domain concept — Backpack saves it as a structured knowledge graph. Next time you ask, Claude already knows.
 
 ```
-[Ingredient: garlic] --USED_IN--> [Recipe: Aglio e Olio]
-[Module: auth]       --DEPENDS_ON--> [Module: database]
+You: "We just signed Acme Corp, they're on the Enterprise tier, main contact is Sarah Chen"
+
+Claude: [saves to backpack → clients ontology]
+
+--- weeks later, different conversation ---
+
+You: "What do we know about Acme Corp?"
+
+Claude: "Acme Corp is on the Enterprise tier, main contact is Sarah Chen..."
 ```
 
-Tell Claude what to store:
+No copy-pasting. No re-explaining. Your knowledge carries forward.
 
-> "Create an ontology about our codebase architecture"
+## Get started
 
-> "Search the backpack for anything related to authentication"
+Tell Claude to set up Backpack:
 
-> "Add the deployment pipeline to the infrastructure ontology"
+> "Add backpack to this project"
 
-### Progressive Discovery
+Claude will configure the MCP server for you. Restart Claude Code and you're ready.
 
-Tools are organized in layers so the context window stays clean. Claude starts broad and drills down — only pulling in what it needs.
+Or set it up yourself — pick local or cloud:
 
-| Layer | Tools | Returns |
-|-------|-------|---------|
-| **Discover** | `backpack_list`, `backpack_create`, `backpack_describe` | Ontology names, descriptions, type counts |
-| **Browse** | `backpack_list_nodes`, `backpack_node_types`, `backpack_search` | Paginated node summaries (id, type, label) |
-| **Inspect** | `backpack_get_node`, `backpack_get_neighbors` | Full node data, graph traversal |
-| **Mutate** | `backpack_add_node`, `backpack_update_node`, `backpack_add_edge`, ... | Create and modify data |
+| Mode | Setup command |
+|---|---|
+| **Local** (free, private, on your machine) | `claude mcp add backpack -- npx backpack-ontology` |
+| **Backpack App** (free account, cloud sync) | `claude mcp add backpack-app -- npx backpack-app` |
 
-## Tools Reference
+Backpack App syncs your knowledge across devices and gives you access to the web-based graph visualizer at [app.backpackontology.com](https://app.backpackontology.com). On first run, a browser window opens for sign-in — after that, it's automatic.
 
-### Discovery
+## What to say to Claude
 
-| Tool | Description |
-|------|-------------|
-| `backpack_list` | List all ontologies with names, descriptions, and summary counts |
-| `backpack_create` | Create a new empty ontology |
-| `backpack_delete` | Permanently delete an ontology and all its data |
-| `backpack_describe` | Inspect ontology structure: node types, edge types, counts |
+You don't need to learn commands or tools. Just talk to Claude naturally. Here's what you can do:
 
-### Browsing
+### Remember something
 
-| Tool | Description |
-|------|-------------|
-| `backpack_node_types` | List distinct node types with counts |
-| `backpack_list_nodes` | Paginated node summaries, optionally filtered by type |
-| `backpack_search` | Case-insensitive text search across all node properties |
+> "Remember that Acme Corp is on the Enterprise tier, main contact is Sarah Chen"
 
-### Inspection
+> "Add our new vendor agreement details to backpack"
 
-| Tool | Description |
-|------|-------------|
-| `backpack_get_node` | Full node with all properties and connected edge summaries |
-| `backpack_get_neighbors` | BFS graph traversal from a node (max depth 3) |
+> "Start an ontology for our hiring process"
 
-### Mutation
+### Find something
 
-| Tool | Description |
-|------|-------------|
-| `backpack_add_node` | Add a node with a freeform type and properties |
-| `backpack_update_node` | Merge new properties into an existing node |
-| `backpack_remove_node` | Remove a node and cascade-delete its edges |
-| `backpack_add_edge` | Create a typed relationship between two nodes |
-| `backpack_remove_edge` | Remove a relationship |
-| `backpack_import_nodes` | Bulk-add multiple nodes in a single operation |
+> "What's in my backpack about Acme Corp?"
 
-## Programmatic API
+> "Search backpack for anything related to compliance"
 
-The core engine has no MCP dependency and can be used as a library:
+> "What do we know about the deployment process?"
 
-```typescript
-import { Backpack, JsonFileBackend } from "backpack-ontology";
+### See the big picture
 
-const backpack = new Backpack(new JsonFileBackend());
-await backpack.initialize();
+> "Show me my knowledge graph"
 
-await backpack.createOntology("my-graph", "A knowledge graph");
-const node = await backpack.addNode("my-graph", "Person", { name: "Alice" });
-await backpack.addEdge("my-graph", "KNOWS", node.id, otherNodeId);
+> "What's in my backpack?"
 
-// Search across all node properties (case-insensitive)
-const results = await backpack.searchNodes("my-graph", "alice");
+> "Describe the clients ontology"
 
-// BFS traversal from a node (depth 1–3)
-const neighbors = await backpack.getNeighbors("my-graph", node.id, undefined, "both", 2);
-```
+Claude will open the graph visualizer so you can explore your knowledge visually.
 
-### Pluggable Storage
+### Move to the cloud
 
-The `StorageBackend` interface allows custom persistence implementations:
+> "Sync my backpack to the cloud"
 
-```typescript
-import { Backpack, StorageBackend } from "backpack-ontology";
+> "Upload my local ontologies to Backpack App"
 
-class SqliteBackend implements StorageBackend {
-  // initialize, listOntologies, loadOntology, saveOntology,
-  // createOntology, deleteOntology, ontologyExists
-}
+Claude will migrate your local knowledge to Backpack App so you can access it from any device.
 
-const backpack = new Backpack(new SqliteBackend());
-```
+## What people use it for
 
-## Data Storage
+- **Client management** — keep track of accounts, contacts, contract details, and conversations across sessions
+- **Process documentation** — capture how things are done so Claude can help consistently
+- **Project knowledge** — architecture decisions, vendor relationships, compliance requirements
+- **Domain expertise** — industry terminology, regulatory frameworks, best practices
+- **Team onboarding** — new team members get Claude with your organization's context already loaded
 
-Backpack follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/latest/):
+## How it works
 
-```
-~/.local/share/backpack/ontologies/
-├── cooking/
-│   └── ontology.json
-└── codebase-arch/
-    └── ontology.json
-```
+You have one backpack — it goes everywhere with you. Inside it, you organize knowledge into **ontologies**, each one covering a different topic (clients, processes, compliance, etc.). Within each ontology, information is stored as things connected by relationships. You don't need to think about the structure. Claude handles it automatically based on what you're discussing.
 
-Ontology files are human-readable JSON. They can be inspected, edited, backed up, or version-controlled directly.
+## Data and privacy
+
+**Local mode**: Your data is stored as readable JSON files on your computer at `~/.local/share/backpack/ontologies/`. You can inspect, edit, back up, or version-control these files directly.
+
+**Backpack App**: Your data is stored securely in our cloud infrastructure. See our [privacy policy](https://backpackontology.com/privacy) for details.
+
+**Telemetry**: Backpack collects anonymous usage statistics (which tools are used, session duration) to improve the product. No content, names, or personal data is ever collected. Opt out with `DO_NOT_TRACK=1`.
+
+## Reference
+
+### CLI commands
+
+| Command | What it does |
+|---|---|
+| `npx backpack-ontology` | Start the local MCP server |
+| `npx backpack-app` | Start the Backpack App MCP server (cloud) |
+| `npx backpack-sync` | Upload local ontologies to Backpack App |
+| `npx backpack-viewer` | Open the graph visualizer (http://localhost:5173) |
+| `npx backpack-init` | Reinstall auto-capture hooks if removed |
+
+### Tools
+
+Claude uses these automatically — you don't need to call them directly.
+
+| What Claude does | How |
+|---|---|
+| See what's in the backpack | `backpack_list`, `backpack_describe` |
+| Add a new ontology to the backpack | `backpack_create` |
+| Find something in the backpack | `backpack_search`, `backpack_list_nodes` |
+| Get full details on an item | `backpack_get_node`, `backpack_get_neighbors` |
+| Add or update knowledge | `backpack_add_node`, `backpack_update_node`, `backpack_add_edge` |
+| Bulk import | `backpack_import_nodes` |
+| Clean up | `backpack_remove_node`, `backpack_remove_edge`, `backpack_delete` |
+
+### Advanced configuration
 
 | Variable | Effect |
-|----------|--------|
-| `XDG_DATA_HOME` | Override data location (default: `~/.local/share`) |
-| `XDG_CONFIG_HOME` | Override config location (default: `~/.config`) |
-| `BACKPACK_DIR` | Override both — config at `$BACKPACK_DIR/config`, data at `$BACKPACK_DIR/data` |
-
-## Telemetry
-
-Backpack collects anonymous usage telemetry to improve the product. No personal data, ontology content, or tool arguments are ever collected.
-
-**What is collected:**
-- Tool call counts (which tools are used, not what data is passed)
-- Session duration
-- Aggregate ontology statistics (total node/edge counts, not names or content)
-- Runtime environment (Node.js version, OS, platform)
-
-**What is never collected:**
-- Ontology names, descriptions, or content
-- Node or edge properties
-- File paths or user identifiers
-- Tool arguments or query strings
-
-**To opt out**, use any of the following:
-
-```bash
-# Environment variable (standard)
-export DO_NOT_TRACK=1
-
-# Backpack-specific environment variable
-export BACKPACK_TELEMETRY_DISABLED=1
-```
-
-Or add to `~/.config/backpack/config.json`:
-
-```json
-{
-  "telemetry": false
-}
-```
-
-## Visualization
-
-Use [backpack-viewer](https://www.npmjs.com/package/backpack-viewer) to visualize ontologies in a web-based graph explorer with force-directed layout and live reload.
+|---|---|
+| `XDG_DATA_HOME` | Change local data location (default: `~/.local/share`) |
+| `BACKPACK_DIR` | Override all Backpack directories |
+| `DO_NOT_TRACK` | Disable anonymous telemetry |
 
 ## Support
 
-For questions, feedback, or sponsorship inquiries: **support@backpackontology.com**
+Questions, feedback, or partnership inquiries: **support@backpackontology.com**
 
 ## License
 

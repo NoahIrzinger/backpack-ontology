@@ -1,19 +1,21 @@
 # Privacy Policy
 
-**Backpack Ontology**
-Last updated: March 20, 2026
+**Backpack Ontology (Open Source MCP Server)**
+Last updated: March 23, 2026
 
-## Overview
+## Scope
 
-Backpack Ontology is a local-first knowledge graph engine. All ontology data (nodes, edges, properties, names, descriptions) is stored exclusively on your device and is never transmitted to any external server.
+This privacy policy applies only to the open source **backpack-ontology** MCP server and **backpack-viewer** packages distributed via npm. It does not apply to Backpack App (app.backpackontology.com), which is a separate commercial service with its own terms of service and privacy policy.
 
 ## Data Storage
 
-Ontology data is stored locally at `~/.local/share/backpack/ontologies/` (or a custom path if configured). No data is sent to Backpack Ontology's servers or any third party.
+In local mode, all ontology data (nodes, edges, properties, names, descriptions) is stored exclusively on your device at `~/.local/share/backpack/ontologies/` (or a custom path if configured). No ontology data is sent to any external server.
+
+When using Backpack App mode, your data is transmitted to and stored by the Backpack App service. That service's privacy policy governs how your data is handled — not this one.
 
 ## Telemetry
 
-Backpack Ontology collects anonymous, aggregated usage telemetry to improve the product. This telemetry is entirely optional and can be disabled.
+The open source MCP server collects anonymous, aggregated usage telemetry to improve the product. This telemetry is entirely optional and can be disabled.
 
 ### What is collected
 
@@ -42,7 +44,11 @@ When telemetry is disabled, no data is transmitted.
 
 ## Third-Party Services
 
-Backpack Ontology does not integrate with any third-party analytics, advertising, or tracking services. The telemetry endpoint is operated by the Backpack Ontology project.
+The open source MCP server does not integrate with any third-party analytics, advertising, or tracking services. The telemetry endpoint is operated by the Backpack project.
+
+## Relationship to Backpack App
+
+Backpack App (app.backpackontology.com) is a separate commercial service. If you use Backpack App, your use is governed by the Backpack App Terms of Service and Privacy Policy, which will be available at app.backpackontology.com when the service launches. This open source privacy policy does not cover the Backpack App service.
 
 ## Children's Privacy
 

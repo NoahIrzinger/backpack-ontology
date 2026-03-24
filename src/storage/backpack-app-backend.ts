@@ -7,42 +7,44 @@ import type {
 /**
  * Storage backend that delegates to the Backpack App HTTP API.
  *
- * Expects:
- *   - baseUrl: e.g. "https://app.backpackontology.com"
- *   - token:   a Bearer JWT from the Backpack App token system
+ * Accepts either a static token string or a function that returns a token
+ * (for OAuth flows with token refresh).
  */
 export class BackpackAppBackend implements StorageBackend {
   private baseUrl: string;
-  private token: string;
+  private getToken: () => Promise<string>;
 
-  constructor(baseUrl: string, token: string) {
-    // Strip trailing slash
+  constructor(baseUrl: string, token: string | (() => Promise<string>)) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
-    this.token = token;
+    this.getToken =
+      typeof token === "string" ? () => Promise.resolve(token) : token;
   }
 
-  private headers(): Record<string, string> {
+  private async headers(): Promise<Record<string, string>> {
+    const accessToken = await this.getToken();
     return {
-      Authorization: `Bearer ${this.token}`,
+      Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     };
   }
 
   private async request(path: string, init?: RequestInit): Promise<Response> {
     const url = `${this.baseUrl}${path}`;
+    const hdrs = await this.headers();
     const res = await fetch(url, {
       ...init,
-      headers: { ...this.headers(), ...init?.headers },
+      headers: { ...hdrs, ...init?.headers },
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Backpack App API ${init?.method ?? "GET"} ${path} failed (${res.status}): ${body}`);
+      throw new Error(
+        `Backpack App API ${init?.method ?? "GET"} ${path} failed (${res.status}): ${body}`
+      );
     }
     return res;
   }
 
   async initialize(): Promise<void> {
-    // Verify connectivity by listing ontologies
     await this.request("/api/ontologies");
   }
 
@@ -52,7 +54,9 @@ export class BackpackAppBackend implements StorageBackend {
   }
 
   async loadOntology(name: string): Promise<OntologyData> {
-    const res = await this.request(`/api/ontologies/${encodeURIComponent(name)}`);
+    const res = await this.request(
+      `/api/ontologies/${encodeURIComponent(name)}`
+    );
     return (await res.json()) as OntologyData;
   }
 
@@ -63,7 +67,10 @@ export class BackpackAppBackend implements StorageBackend {
     });
   }
 
-  async createOntology(name: string, description: string): Promise<OntologyData> {
+  async createOntology(
+    name: string,
+    description: string
+  ): Promise<OntologyData> {
     const now = new Date().toISOString();
     const data: OntologyData = {
       metadata: { name, description, createdAt: now, updatedAt: now },

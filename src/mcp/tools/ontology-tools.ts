@@ -12,7 +12,7 @@ export function registerOntologyTools(
     {
       title: "List Ontologies",
       description:
-        "List all ontologies in the backpack. Returns names, descriptions, and summary counts. Start here to discover what knowledge is available.",
+        "See what's in the backpack. Lists all ontologies with names, descriptions, and summary counts. Start here to discover what knowledge the user has stored.",
       annotations: { readOnlyHint: true },
     },
     async () => {
@@ -24,7 +24,7 @@ export function registerOntologyTools(
             type: "text" as const,
             text:
               ontologies.length === 0
-                ? "No ontologies in the backpack yet. Use backpack_create to add one."
+                ? "The backpack is empty. Use backpack_create to add an ontology."
                 : JSON.stringify(ontologies, null, 2),
           },
         ],
@@ -37,7 +37,7 @@ export function registerOntologyTools(
     {
       title: "Create Ontology",
       description:
-        "Create a new empty ontology. After creation, add nodes and edges to populate it.",
+        "Add a new ontology to the backpack. An ontology is a knowledge graph about a specific topic. After creation, add nodes and edges to populate it.",
       inputSchema: {
         name: z
           .string()
@@ -79,7 +79,7 @@ export function registerOntologyTools(
     {
       title: "Delete Ontology",
       description:
-        "Permanently delete an ontology and all its data. This cannot be undone.",
+        "Remove an ontology from the backpack. Permanently deletes it and all its data. This cannot be undone.",
       annotations: { destructiveHint: true },
       inputSchema: {
         ontology: z.string().describe("Name of the ontology to delete"),
@@ -113,7 +113,7 @@ export function registerOntologyTools(
     {
       title: "Describe Ontology",
       description:
-        "Get the structure of an ontology: what node types and edge types exist, with counts. No instance data is returned — use this to understand the shape before drilling into nodes.",
+        "Look inside an ontology to see its structure: what types of things and relationships exist, with counts. No actual data is returned — use this to understand what's there before drilling in.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         ontology: z.string().describe("Name of the ontology to describe"),

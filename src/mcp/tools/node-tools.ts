@@ -12,7 +12,7 @@ export function registerNodeTools(
     {
       title: "List Node Types",
       description:
-        "Get all distinct node types in an ontology with counts. Useful for understanding what kinds of data exist before browsing.",
+        "See what kinds of things are in an ontology, with counts. Useful for understanding what's there before browsing.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),
@@ -43,7 +43,7 @@ export function registerNodeTools(
     {
       title: "List Nodes",
       description:
-        "List nodes in an ontology with pagination. Returns summaries (id, type, label) — not full data. Use backpack_get_node to get the full node.",
+        "Browse things in an ontology with pagination. Returns summaries (id, type, label) — not full details. Use backpack_get_node to get everything about a specific item.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),
@@ -90,7 +90,7 @@ export function registerNodeTools(
     {
       title: "Search Nodes",
       description:
-        "Search for nodes by text query. Matches against all string properties (case-insensitive). Returns summaries.",
+        "Search the backpack for matching items by text. Searches across all properties in an ontology (case-insensitive). Returns summaries.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),
@@ -132,7 +132,7 @@ export function registerNodeTools(
     {
       title: "Get Node",
       description:
-        "Get the full details of a single node, including all properties and its connected edges.",
+        "Get the full details of a specific item in an ontology, including all its properties and relationships.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),
@@ -164,7 +164,7 @@ export function registerNodeTools(
     {
       title: "Add Node",
       description:
-        "Add a new node to an ontology. The type is freeform — use whatever makes sense. Properties are key-value pairs.",
+        "Add a new item to an ontology in the backpack. The type is freeform — use whatever makes sense for the domain. Properties are key-value pairs.",
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),
         type: z
@@ -208,7 +208,7 @@ export function registerNodeTools(
     {
       title: "Update Node",
       description:
-        "Update a node's properties. New properties are merged with existing ones (existing keys are overwritten, new keys are added, unmentioned keys are kept).",
+        "Update an item's properties in the backpack. New properties are merged with existing ones (existing keys are overwritten, new keys are added, unmentioned keys are kept).",
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),
         nodeId: z.string().describe("ID of the node to update"),
@@ -246,7 +246,7 @@ export function registerNodeTools(
     {
       title: "Remove Node",
       description:
-        "Remove a node and all its connected edges from an ontology.",
+        "Remove an item and all its relationships from an ontology in the backpack.",
       annotations: { destructiveHint: true },
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),

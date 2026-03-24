@@ -12,7 +12,7 @@ export function registerBulkTools(
     {
       title: "Import Nodes",
       description:
-        "Bulk-add multiple nodes to an ontology at once. Each node needs a type and properties.",
+        "Add multiple items to an ontology in the backpack at once. Each item needs a type and properties.",
       inputSchema: {
         ontology: z.string().describe("Name of the ontology"),
         nodes: z

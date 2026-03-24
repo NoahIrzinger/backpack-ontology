@@ -1,8 +1,10 @@
+import * as crypto from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Backpack } from "../core/backpack.js";
 import type { StorageBackend } from "../core/types.js";
 import { JsonFileBackend } from "../storage/json-file-backend.js";
 import { BackpackAppBackend } from "../storage/backpack-app-backend.js";
+import { OAuthClient } from "../auth/oauth.js";
 import { initTelemetry } from "../core/telemetry.js";
 import { registerOntologyTools } from "./tools/ontology-tools.js";
 import { registerNodeTools } from "./tools/node-tools.js";
@@ -15,13 +17,22 @@ export interface BackpackLocalConfig {
   dataDir?: string;
 }
 
-/** Configuration for Backpack App cloud storage. */
-export interface BackpackAppConfig {
+/** Configuration for Backpack App with a static token. */
+export interface BackpackAppTokenConfig {
   mode: "app";
   url: string;
   token: string;
 }
 
+/** Configuration for Backpack App with OAuth2/OIDC SSO. */
+export interface BackpackAppOAuthConfig {
+  mode: "app";
+  url: string;
+  clientId: string;
+  issuerUrl: string;
+}
+
+export type BackpackAppConfig = BackpackAppTokenConfig | BackpackAppOAuthConfig;
 export type BackpackServerConfig = BackpackLocalConfig | BackpackAppConfig;
 
 /**
@@ -29,23 +40,37 @@ export type BackpackServerConfig = BackpackLocalConfig | BackpackAppConfig;
  *
  * Supports two modes:
  *   - "local" (default): JSON files on disk
- *   - "app": Backpack App cloud API
+ *   - "app": Backpack App cloud API (via static token or OAuth2 SSO)
  */
 export async function createMcpServer(
   config?: BackpackServerConfig
 ): Promise<McpServer> {
   let backend: StorageBackend;
+
   if (!config || config.mode === "local") {
     backend = new JsonFileBackend(config?.dataDir);
-  } else {
+  } else if ("token" in config) {
     backend = new BackpackAppBackend(config.url, config.token);
+  } else {
+    // OAuth2 SSO — opens browser on first run, caches tokens
+    const cacheKey = crypto
+      .createHash("sha256")
+      .update(config.url)
+      .digest("hex")
+      .slice(0, 12);
+    const oauth = new OAuthClient(config.clientId, config.issuerUrl, cacheKey);
+    backend = new BackpackAppBackend(config.url, () => oauth.getAccessToken());
   }
 
   const backpack = new Backpack(backend);
   await backpack.initialize();
 
   // Initialize telemetry (non-blocking, fails silently)
-  try { await initTelemetry(backpack); } catch { /* noop */ }
+  try {
+    await initTelemetry(backpack);
+  } catch {
+    /* noop */
+  }
 
   const server = new McpServer(
     {
@@ -53,14 +78,14 @@ export async function createMcpServer(
       version: "0.2.0",
     },
     {
-      instructions: `Backpack is a persistent knowledge graph that remembers what matters across conversations.
+      instructions: `Backpack is the user's persistent knowledge base that carries what matters across conversations. Think of it as a single backpack the user carries everywhere — inside it are ontologies, each one a knowledge graph about a different topic (clients, processes, architecture, etc.).
 
-When you learn something meaningful — a business relationship, a technical decision, a process, a domain concept — consider adding it to backpack. Use backpack_list to see what ontologies exist and backpack_describe to understand their structure before adding to them. Create a new ontology when the topic is distinct from existing ones.
+There is one backpack. Inside it are ontologies. Each ontology contains nodes (things) connected by edges (relationships). Use backpack_list to see what's in the backpack, and backpack_describe to understand an ontology's structure before adding to it. Create a new ontology when the topic is distinct from existing ones.
 
 After updating an ontology, let the user know they can visualize their knowledge graph by running: npx backpack-viewer (opens http://localhost:5173)
 
 Be selective — not every conversation needs to be captured. Focus on knowledge with lasting value: relationships, decisions, architecture, processes, domain concepts, conventions.`,
-    },
+    }
   );
 
   // Register all tool groups
