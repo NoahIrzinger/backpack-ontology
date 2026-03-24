@@ -27,7 +27,7 @@ No copy-pasting. No re-explaining. Your knowledge carries forward.
 Sign up for a free account at [app.backpackontology.com](https://app.backpackontology.com), then add Backpack to Claude Code:
 
 ```bash
-claude mcp add backpack-app -s user -- npx backpack-app
+claude mcp add backpack-app -s user -- npx -p backpack-ontology backpack-app
 ```
 
 Your knowledge syncs across devices, you can share with your team, and you get access to the web-based graph visualizer. On first run, a browser window opens for sign-in. After that, it's automatic.
@@ -37,7 +37,7 @@ Your knowledge syncs across devices, you can share with your team, and you get a
 Prefer to keep everything on your machine? No account needed:
 
 ```bash
-claude mcp add backpack-local -s user -- npx backpack-local
+claude mcp add backpack-local -s user -- npx backpack-ontology
 ```
 
 You can always move to Backpack App later by telling Claude "sync my backpack to the cloud".
@@ -106,11 +106,11 @@ You have one backpack. It goes everywhere with you. Inside it, you organize know
 
 | Command | What it does |
 |---|---|
-| `npx backpack-local` | Start the Backpack Local MCP server |
-| `npx backpack-app` | Start the Backpack App MCP server |
-| `npx backpack-sync` | Upload local ontologies to Backpack App |
+| `npx backpack-ontology` | Start the Backpack Local MCP server |
+| `npx -p backpack-ontology backpack-app` | Start the Backpack App MCP server |
+| `npx -p backpack-ontology backpack-sync` | Upload local ontologies to Backpack App |
 | `npx backpack-viewer` | Open the graph visualizer (http://localhost:5173) |
-| `npx backpack-init` | Reinstall auto-capture hooks if removed |
+| `npx -p backpack-ontology backpack-init` | Reinstall auto-capture hooks if removed |
 
 ### Tools
 
