@@ -8,8 +8,8 @@ import { shutdown as shutdownTelemetry } from "../core/telemetry.js";
 // Env vars override for development/testing only.
 const DEFAULTS = {
   url: "https://app.backpackontology.com",
-  clientId: "YOUR_ENTRA_CLIENT_ID_HERE",
-  issuerUrl: "https://YOUR_TENANT.ciamlogin.com/YOUR_TENANT_ID/v2.0",
+  clientId: "2d84f4b4-0c8c-4eb5-8f26-4dabc7f07551",
+  issuerUrl: "https://8522cad6-89da-465d-ad30-7c1ac03c52c7.ciamlogin.com/8522cad6-89da-465d-ad30-7c1ac03c52c7/v2.0",
 };
 
 async function main() {
