@@ -22,20 +22,21 @@ No copy-pasting. No re-explaining. Your knowledge carries forward.
 
 ## Get started
 
-Tell Claude to set up Backpack:
+### Local mode (free, private, on your machine)
 
-> "Add backpack to this project"
+```bash
+claude mcp add backpack -s user -- npx backpack-ontology
+```
 
-Claude will configure the MCP server for you. Restart Claude Code and you're ready.
+The `-s user` flag installs it globally — backpack is available in every project, not just one.
 
-Or set it up yourself — pick local or cloud:
+### Backpack App (free account, cloud sync)
 
-| Mode | Setup command |
-|---|---|
-| **Local** (free, private, on your machine) | `claude mcp add backpack -- npx backpack-ontology` |
-| **Backpack App** (free account, cloud sync) | `claude mcp add backpack-app -- npx backpack-app` |
+```bash
+claude mcp add backpack-app -s user -- npx backpack-app
+```
 
-Backpack App syncs your knowledge across devices and gives you access to the web-based graph visualizer at [app.backpackontology.com](https://app.backpackontology.com). On first run, a browser window opens for sign-in — after that, it's automatic.
+Syncs your knowledge across devices, share with your team, and access the web-based graph visualizer at [app.backpackontology.com](https://app.backpackontology.com). On first run, a browser window opens for sign-in — after that, it's automatic.
 
 ## What to say to Claude
 
