@@ -6,10 +6,11 @@
   "author": "Noah Irzinger",
   "type": "module",
   "bin": {
-    "backpack": "./dist/bin/backpack.js",
+    "backpack-local": "./dist/bin/backpack.js",
     "backpack-app": "./dist/bin/backpack-app.js",
     "backpack-sync": "./dist/bin/backpack-sync.js",
-    "backpack-init": "./dist/bin/init.js"
+    "backpack-init": "./dist/bin/init.js",
+    "backpack": "./dist/bin/backpack.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
