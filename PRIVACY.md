@@ -1,63 +1,13 @@
-# Privacy Policy
+# Privacy Policy — Backpack Local
 
-**Backpack Ontology (Open Source MCP Server)**
-Last updated: March 23, 2026
+Full policy: [backpackontology.com/privacy-local](https://backpackontology.com/privacy-local)
 
-## Scope
+## Summary
 
-This privacy policy applies only to the open source **backpack-ontology** MCP server and **backpack-viewer** packages distributed via npm. It does not apply to Backpack App (app.backpackontology.com), which is a separate commercial service with its own terms of service and privacy policy.
+Backpack Local operates entirely on your device. No ontology data is transmitted to our servers.
 
-## Data Storage
+**Optional telemetry** collects anonymous usage statistics (tool counts, session duration). No content, names, or personal data is ever collected.
 
-With Backpack Local, all ontology data (nodes, edges, properties, names, descriptions) is stored exclusively on your device at `~/.local/share/backpack/ontologies/` (or a custom path if configured). No ontology data is sent to any external server.
+**Opt out:** `DO_NOT_TRACK=1` or `BACKPACK_TELEMETRY_DISABLED=1`
 
-When using Backpack App mode, your data is transmitted to and stored by the Backpack App service. That service's privacy policy governs how your data is handled — not this one.
-
-## Telemetry
-
-The open source MCP server collects anonymous, aggregated usage telemetry to improve the product. This telemetry is entirely optional and can be disabled.
-
-### What is collected
-
-- Tool call counts (which tools are used, not what data is passed)
-- Session duration
-- Aggregate ontology statistics (total node and edge counts only, not names or content)
-- Runtime environment (Node.js version, OS, platform)
-
-### What is never collected
-
-- Ontology names, descriptions, or content
-- Node or edge properties, types, or identifiers
-- File paths or user identifiers
-- Tool arguments or query strings
-- Any personally identifiable information (PII)
-
-### How to opt out
-
-Disable telemetry using any of the following methods:
-
-- Set the environment variable `DO_NOT_TRACK=1` (industry standard)
-- Set the environment variable `BACKPACK_TELEMETRY_DISABLED=1`
-- Add `{"telemetry": false}` to `~/.config/backpack/config.json`
-
-When telemetry is disabled, no data is transmitted.
-
-## Third-Party Services
-
-The open source MCP server does not integrate with any third-party analytics, advertising, or tracking services. The telemetry endpoint is operated by the Backpack project.
-
-## Relationship to Backpack App
-
-Backpack App (app.backpackontology.com) is a separate commercial service. If you use Backpack App, your use is governed by the Backpack App Terms of Service and Privacy Policy, which will be available at app.backpackontology.com when the service launches. This open source privacy policy does not cover the Backpack App service.
-
-## Children's Privacy
-
-Backpack Ontology does not knowingly collect any personal information from anyone, including children under 13.
-
-## Changes to This Policy
-
-Updates to this policy will be reflected in this document with an updated revision date. Continued use of the software after changes constitutes acceptance of the revised policy.
-
-## Contact
-
-For privacy-related questions or concerns: support@backpackontology.com
+**Backpack App** (the cloud service) has a [separate privacy policy](https://backpackontology.com/privacy) with different terms regarding data processing and storage.
