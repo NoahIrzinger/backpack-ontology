@@ -13,10 +13,7 @@ async function main() {
   console.log("  Backpack hooks are installed.");
   console.log("");
   console.log("  What's enabled:");
-  console.log("    - Auto-capture: a background agent reviews your Claude conversations");
-  console.log("      and saves meaningful knowledge to your backpack.");
-  console.log("    - Viewer suggestions: after updates, you'll be reminded to");
-  console.log("      visualize your knowledge graph.");
+  console.log("    - Update notifications: confirms when your backpack is updated.");
   console.log("");
   console.log("  To disable, remove the backpack hooks from .claude/settings.json");
   console.log("");

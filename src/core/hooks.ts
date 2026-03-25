@@ -98,7 +98,7 @@ export async function ensureHooksInstalled(): Promise<void> {
   );
 
   console.error(
-    "Backpack hooks enabled (auto-capture + viewer suggestions). " +
+    "Backpack hooks enabled (update notifications). " +
       "To disable, remove backpack hooks from .claude/settings.json"
   );
 }
