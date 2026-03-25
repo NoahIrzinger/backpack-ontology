@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
+import { viewerUrl } from "./viewer-url.js";
 
 export function registerEdgeTools(
   server: McpServer,
@@ -124,9 +125,11 @@ export function registerEdgeTools(
           depth
         );
         trackEvent("tool_call", { tool: "backpack_get_neighbors" });
+        const allIds = [nodeId, ...result.neighbors.map((n: { node: { id: string } }) => n.node.id)];
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(result, null, 2) },
+            { type: "text" as const, text: `View in graph: ${viewerUrl(ontology, allIds)}` },
           ],
         };
       } catch (err) {

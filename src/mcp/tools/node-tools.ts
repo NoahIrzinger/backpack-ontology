@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
 import { formatTermsHint } from "./terms-hint.js";
+import { viewerUrl } from "./viewer-url.js";
 
 export function registerNodeTools(
   server: McpServer,
@@ -106,15 +107,14 @@ export function registerNodeTools(
       try {
         const results = await backpack.searchNodes(ontology, query, type);
         trackEvent("tool_call", { tool: "backpack_search" });
+        if (results.length === 0) {
+          return { content: [{ type: "text" as const, text: `No nodes matching "${query}" found.` }] };
+        }
+        const ids = results.map((r: { id: string }) => r.id);
         return {
           content: [
-            {
-              type: "text" as const,
-              text:
-                results.length === 0
-                  ? `No nodes matching "${query}" found.`
-                  : JSON.stringify(results, null, 2),
-            },
+            { type: "text" as const, text: JSON.stringify(results, null, 2) },
+            { type: "text" as const, text: `View in graph: ${viewerUrl(ontology, ids)}` },
           ],
         };
       } catch (err) {
@@ -147,6 +147,7 @@ export function registerNodeTools(
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(result, null, 2) },
+            { type: "text" as const, text: `View in graph: ${viewerUrl(ontology, [nodeId])}` },
           ],
         };
       } catch (err) {

@@ -84,6 +84,8 @@ There is one backpack. Inside it are learning graphs. Each learning graph contai
 
 After updating a learning graph, let the user know they can visualize it by running: npx backpack-viewer (opens http://localhost:5173)
 
+Deep links: when showing the user specific nodes, include a viewer URL so they can jump directly to them. Format: http://localhost:5173#graph-name?node=nodeId1,nodeId2 — this opens the viewer, loads the graph, and focuses on those nodes.
+
 Be selective — not every conversation needs to be captured. Focus on knowledge with lasting value: relationships, decisions, architecture, processes, domain concepts, conventions.`,
     }
   );
