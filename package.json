@@ -11,6 +11,7 @@
     "backpack-app": "./dist/bin/backpack-app.js",
     "backpack-sync": "./dist/bin/backpack-sync.js",
     "backpack-init": "./dist/bin/init.js",
+    "backpack-token": "./dist/bin/backpack-token.js",
     "backpack": "./dist/bin/backpack.js"
   },
   "main": "./dist/index.js",
