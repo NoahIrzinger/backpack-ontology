@@ -1,7 +1,7 @@
 import type {
   StorageBackend,
-  OntologyData,
-  OntologySummary,
+  LearningGraphData,
+  LearningGraphSummary,
 } from "../core/types.js";
 
 /**
@@ -48,19 +48,19 @@ export class BackpackAppBackend implements StorageBackend {
     await this.request("/api/ontologies");
   }
 
-  async listOntologies(): Promise<OntologySummary[]> {
+  async listOntologies(): Promise<LearningGraphSummary[]> {
     const res = await this.request("/api/ontologies");
-    return (await res.json()) as OntologySummary[];
+    return (await res.json()) as LearningGraphSummary[];
   }
 
-  async loadOntology(name: string): Promise<OntologyData> {
+  async loadOntology(name: string): Promise<LearningGraphData> {
     const res = await this.request(
       `/api/ontologies/${encodeURIComponent(name)}`
     );
-    return (await res.json()) as OntologyData;
+    return (await res.json()) as LearningGraphData;
   }
 
-  async saveOntology(name: string, data: OntologyData): Promise<void> {
+  async saveOntology(name: string, data: LearningGraphData): Promise<void> {
     await this.request(`/api/ontologies/${encodeURIComponent(name)}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -70,9 +70,9 @@ export class BackpackAppBackend implements StorageBackend {
   async createOntology(
     name: string,
     description: string
-  ): Promise<OntologyData> {
+  ): Promise<LearningGraphData> {
     const now = new Date().toISOString();
-    const data: OntologyData = {
+    const data: LearningGraphData = {
       metadata: { name, description, createdAt: now, updatedAt: now },
       nodes: [],
       edges: [],

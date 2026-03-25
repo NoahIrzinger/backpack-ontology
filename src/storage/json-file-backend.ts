@@ -3,8 +3,8 @@ import * as path from "node:path";
 import { dataDir } from "../core/paths.js";
 import type {
   StorageBackend,
-  OntologyData,
-  OntologySummary,
+  LearningGraphData,
+  LearningGraphSummary,
 } from "../core/types.js";
 
 /**
@@ -44,7 +44,7 @@ export class JsonFileBackend implements StorageBackend {
     await fs.mkdir(this.ontologiesDir(), { recursive: true });
   }
 
-  async listOntologies(): Promise<OntologySummary[]> {
+  async listOntologies(): Promise<LearningGraphSummary[]> {
     const dir = this.ontologiesDir();
     let entries: string[];
     try {
@@ -53,13 +53,13 @@ export class JsonFileBackend implements StorageBackend {
       return [];
     }
 
-    const summaries: OntologySummary[] = [];
+    const summaries: LearningGraphSummary[] = [];
 
     for (const entry of entries) {
       const filePath = path.join(dir, entry, "ontology.json");
       try {
         const raw = await fs.readFile(filePath, "utf-8");
-        const data: OntologyData = JSON.parse(raw);
+        const data: LearningGraphData = JSON.parse(raw);
 
         // Derive node type counts from actual data
         const typeCounts = new Map<string, number>();
@@ -85,17 +85,17 @@ export class JsonFileBackend implements StorageBackend {
     return summaries;
   }
 
-  async loadOntology(name: string): Promise<OntologyData> {
+  async loadOntology(name: string): Promise<LearningGraphData> {
     const filePath = this.ontologyFile(name);
     try {
       const raw = await fs.readFile(filePath, "utf-8");
-      return JSON.parse(raw) as OntologyData;
+      return JSON.parse(raw) as LearningGraphData;
     } catch (err) {
       throw new Error(`Ontology not found: ${name}`);
     }
   }
 
-  async saveOntology(name: string, data: OntologyData): Promise<void> {
+  async saveOntology(name: string, data: LearningGraphData): Promise<void> {
     const filePath = this.ontologyFile(name);
     const tmpPath = filePath + ".tmp";
 
@@ -108,13 +108,13 @@ export class JsonFileBackend implements StorageBackend {
   async createOntology(
     name: string,
     description: string
-  ): Promise<OntologyData> {
+  ): Promise<LearningGraphData> {
     if (await this.ontologyExists(name)) {
       throw new Error(`Ontology already exists: ${name}`);
     }
 
     const now = new Date().toISOString();
-    const data: OntologyData = {
+    const data: LearningGraphData = {
       metadata: {
         name,
         description,

@@ -2,7 +2,7 @@ import { generateNodeId, generateEdgeId } from "./ids.js";
 import type {
   Node,
   Edge,
-  OntologyData,
+  LearningGraphData,
   NodeSummary,
   EdgeSummary,
   NodeTypeInfo,
@@ -14,15 +14,15 @@ import type {
 } from "./types.js";
 
 /**
- * In-memory graph operations on an OntologyData object.
+ * In-memory graph operations on an LearningGraphData object.
  * Pure logic — no I/O, no MCP, fully testable.
  *
- * The Graph holds a reference to the OntologyData. When you mutate
+ * The Graph holds a reference to the LearningGraphData. When you mutate
  * the graph (add/remove nodes/edges), the underlying data is modified
  * in place. The caller (Backpack class) is responsible for persisting.
  */
 export class Graph {
-  constructor(public data: OntologyData) {}
+  constructor(public data: LearningGraphData) {}
 
   // --- Helpers ---
 

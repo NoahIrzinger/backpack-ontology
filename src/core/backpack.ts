@@ -3,9 +3,9 @@ import type {
   StorageBackend,
   Node,
   Edge,
-  OntologyData,
-  OntologyMetadata,
-  OntologySummary,
+  LearningGraphData,
+  LearningGraphMetadata,
+  LearningGraphSummary,
   NodeSummary,
   NodeTypeInfo,
   EdgeTypeInfo,
@@ -58,14 +58,14 @@ export class Backpack {
 
   // --- Ontology lifecycle ---
 
-  async listOntologies(): Promise<OntologySummary[]> {
+  async listOntologies(): Promise<LearningGraphSummary[]> {
     return this.storage.listOntologies();
   }
 
   async createOntology(
     name: string,
     description: string
-  ): Promise<OntologyMetadata> {
+  ): Promise<LearningGraphMetadata> {
     const data = await this.storage.createOntology(name, description);
     // Pre-cache the new (empty) graph
     this.graphs.set(name, new Graph(data));
@@ -88,7 +88,7 @@ export class Backpack {
   }
 
   async describeOntology(name: string): Promise<{
-    metadata: OntologyMetadata;
+    metadata: LearningGraphMetadata;
     nodeTypes: NodeTypeInfo[];
     edgeTypes: EdgeTypeInfo[];
     nodeCount: number;

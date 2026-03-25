@@ -9,9 +9,9 @@ export type { BackpackConfig } from "./core/config.js";
 export type {
   Node,
   Edge,
-  OntologyData,
-  OntologyMetadata,
-  OntologySummary,
+  LearningGraphData,
+  LearningGraphMetadata,
+  LearningGraphSummary,
   NodeSummary,
   EdgeSummary,
   NodeTypeInfo,

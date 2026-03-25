@@ -24,15 +24,15 @@ export interface Edge {
   updatedAt: string;
 }
 
-export interface OntologyMetadata {
+export interface LearningGraphMetadata {
   name: string;
   description: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface OntologyData {
-  metadata: OntologyMetadata;
+export interface LearningGraphData {
+  metadata: LearningGraphMetadata;
   nodes: Node[];
   edges: Edge[];
 }
@@ -54,7 +54,7 @@ export interface EdgeSummary {
   targetId: string;
 }
 
-/** How many nodes of each type exist in an ontology. */
+/** How many nodes of each type exist in a learning graph. */
 export interface NodeTypeInfo {
   type: string;
   count: number;
@@ -66,8 +66,8 @@ export interface EdgeTypeInfo {
   count: number;
 }
 
-/** Top-level summary of an ontology — returned by list operations. */
-export interface OntologySummary {
+/** Top-level summary of a learning graph — returned by list operations. */
+export interface LearningGraphSummary {
   name: string;
   description: string;
   nodeCount: number;
@@ -108,10 +108,10 @@ export interface NeighborResult {
  */
 export interface StorageBackend {
   initialize(): Promise<void>;
-  listOntologies(): Promise<OntologySummary[]>;
-  loadOntology(name: string): Promise<OntologyData>;
-  saveOntology(name: string, data: OntologyData): Promise<void>;
-  createOntology(name: string, description: string): Promise<OntologyData>;
+  listOntologies(): Promise<LearningGraphSummary[]>;
+  loadOntology(name: string): Promise<LearningGraphData>;
+  saveOntology(name: string, data: LearningGraphData): Promise<void>;
+  createOntology(name: string, description: string): Promise<LearningGraphData>;
   deleteOntology(name: string): Promise<void>;
   renameOntology(oldName: string, newName: string): Promise<void>;
   ontologyExists(name: string): Promise<boolean>;
