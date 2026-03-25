@@ -27,7 +27,7 @@ No copy-pasting. No re-explaining. Your knowledge carries forward.
 Sign up for a free account at [app.backpackontology.com](https://app.backpackontology.com), then add Backpack to Claude Code:
 
 ```bash
-claude mcp add backpack-app -s user -- npx -p backpack-ontology@latest backpack-app
+claude mcp add backpack-app -s user --transport sse https://app.backpackontology.com/mcp/sse
 ```
 
 Your knowledge syncs across devices, you can share with your team, and you get access to the web-based graph visualizer. On first run, a browser window opens for sign-in. After that, it's automatic.
@@ -48,7 +48,7 @@ Already using Backpack Local and want to move to the cloud? One command uploads 
 
 > "Sync my backpack to the cloud"
 
-Then swap your MCP config from `backpack` to `backpack-app` and you're done.
+Then add the cloud MCP server and you're done.
 
 ## What to say to Claude
 
@@ -107,7 +107,7 @@ You have one backpack. It goes everywhere with you. Inside it, you organize know
 | Command | What it does |
 |---|---|
 | `npx backpack-ontology@latest` | Start the Backpack Local MCP server |
-| `npx -p backpack-ontology@latest backpack-app` | Start the Backpack App MCP server |
+| `claude mcp add backpack-app ... --transport sse` | Connect to Backpack App cloud MCP |
 | `npx -p backpack-ontology@latest backpack-sync` | Upload local ontologies to Backpack App |
 | `npx backpack-viewer` | Open the graph visualizer (http://localhost:5173) |
 | `npx -p backpack-ontology@latest backpack-init` | Reinstall auto-capture hooks if removed |
