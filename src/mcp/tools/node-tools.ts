@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
+import { formatTermsHint } from "./terms-hint.js";
 
 export function registerNodeTools(
   server: McpServer,
@@ -187,11 +188,14 @@ export function registerNodeTools(
           properties as Record<string, unknown>
         );
         trackEvent("tool_call", { tool: "backpack_add_node" });
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(node, null, 2) },
-          ],
-        };
+        const terms = await backpack.getTermsContext(ontology);
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: JSON.stringify(node, null, 2) },
+        ];
+        if (terms) {
+          content.push({ type: "text" as const, text: formatTermsHint(terms) });
+        }
+        return { content };
       } catch (err) {
         return {
           content: [

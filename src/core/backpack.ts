@@ -56,6 +56,15 @@ export class Backpack {
     }
   }
 
+  // --- Term Registry ---
+
+  async getTermsContext(ontologyName: string): Promise<string | null> {
+    if ("loadTerms" in this.storage && typeof (this.storage as any).loadTerms === "function") {
+      return (this.storage as any).loadTerms(ontologyName);
+    }
+    return null;
+  }
+
   // --- Ontology lifecycle ---
 
   async listOntologies(): Promise<LearningGraphSummary[]> {

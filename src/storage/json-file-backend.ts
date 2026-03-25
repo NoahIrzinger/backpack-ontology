@@ -7,6 +7,13 @@ import type {
   LearningGraphSummary,
 } from "../core/types.js";
 
+function firstStringValue(properties: Record<string, unknown>): string | null {
+  for (const value of Object.values(properties)) {
+    if (typeof value === "string") return value;
+  }
+  return null;
+}
+
 /**
  * Default storage backend: JSON files on disk.
  *
@@ -103,6 +110,58 @@ export class JsonFileBackend implements StorageBackend {
     const json = JSON.stringify(data, null, 2);
     await fs.writeFile(tmpPath, json, "utf-8");
     await fs.rename(tmpPath, filePath);
+
+    // Regenerate Term Registry
+    this.writeTerms(name, data).catch(() => {});
+  }
+
+  private termsFile(name: string): string {
+    return path.join(this.ontologyDir(name), "terms.json");
+  }
+
+  private async writeTerms(name: string, data: LearningGraphData): Promise<void> {
+    if (data.nodes.length === 0) return;
+
+    const typeCounts = new Map<string, number>();
+    const edgeTypeCounts = new Map<string, number>();
+    const entities: { name: string; type: string }[] = [];
+    const seenNames = new Set<string>();
+
+    for (const node of data.nodes) {
+      typeCounts.set(node.type, (typeCounts.get(node.type) ?? 0) + 1);
+      const label = firstStringValue(node.properties);
+      if (label && !seenNames.has(label)) {
+        seenNames.add(label);
+        entities.push({ name: label, type: node.type });
+      }
+    }
+
+    for (const edge of data.edges) {
+      edgeTypeCounts.set(edge.type, (edgeTypeCounts.get(edge.type) ?? 0) + 1);
+    }
+
+    const terms = {
+      types: [...typeCounts.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([name, count]) => ({ name, count })),
+      edgeTypes: [...edgeTypeCounts.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([name, count]) => ({ name, count })),
+      entities: entities
+        .sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name))
+        .slice(0, 200),
+    };
+
+    const filePath = this.termsFile(name);
+    await fs.writeFile(filePath, JSON.stringify(terms, null, 2), "utf-8");
+  }
+
+  async loadTerms(name: string): Promise<string | null> {
+    try {
+      return await fs.readFile(this.termsFile(name), "utf-8");
+    } catch {
+      return null;
+    }
   }
 
   async createOntology(
