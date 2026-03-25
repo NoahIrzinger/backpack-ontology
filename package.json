@@ -1,7 +1,7 @@
 {
   "name": "backpack-ontology",
   "version": "0.2.12",
-  "description": "A persistent ontology engine for Claude Code via MCP — progressive discovery of structured knowledge graphs",
+  "description": "A persistent learning graph engine for Claude Code via MCP — structured knowledge that carries forward across sessions",
   "license": "Apache-2.0",
   "author": "Noah Irzinger",
   "type": "module",

@@ -10,9 +10,9 @@ export function registerOntologyTools(
   server.registerTool(
     "backpack_list",
     {
-      title: "List Ontologies",
+      title: "List Learning Graphs",
       description:
-        "See what's in the backpack. Lists all ontologies with names, descriptions, and summary counts. Start here to discover what knowledge the user has stored.",
+        "See what's in the backpack. Lists all learning graphs with names, descriptions, and summary counts. Start here to discover what knowledge the user has stored.",
       annotations: { readOnlyHint: true },
     },
     async () => {
@@ -24,7 +24,7 @@ export function registerOntologyTools(
             type: "text" as const,
             text:
               ontologies.length === 0
-                ? "The backpack is empty. Use backpack_create to add an ontology."
+                ? "The backpack is empty. Use backpack_create to add a learning graph."
                 : JSON.stringify(ontologies, null, 2),
           },
         ],
@@ -35,19 +35,19 @@ export function registerOntologyTools(
   server.registerTool(
     "backpack_create",
     {
-      title: "Create Ontology",
+      title: "Create Learning Graph",
       description:
-        "Add a new ontology to the backpack. An ontology is a knowledge graph about a specific topic. After creation, add nodes and edges to populate it.",
+        "Add a new learning graph to the backpack. A learning graph captures structured knowledge about a specific topic. After creation, add nodes and edges to populate it.",
       inputSchema: {
         name: z
           .string()
           .describe(
-            "URL-safe name for the ontology (lowercase, hyphens ok, e.g. 'cooking' or 'codebase-arch')"
+            "URL-safe name for the learning graph (lowercase, hyphens ok, e.g. 'cooking' or 'codebase-arch')"
           ),
         description: z
           .string()
           .describe(
-            "Human-readable description of what this ontology models"
+            "Human-readable description of what this learning graph captures"
           ),
       },
     },
@@ -59,7 +59,7 @@ export function registerOntologyTools(
           content: [
             {
               type: "text" as const,
-              text: `Created ontology "${name}".\n${JSON.stringify(metadata, null, 2)}`,
+              text: `Created learning graph "${name}".\n${JSON.stringify(metadata, null, 2)}`,
             },
           ],
         };
@@ -77,12 +77,12 @@ export function registerOntologyTools(
   server.registerTool(
     "backpack_delete",
     {
-      title: "Delete Ontology",
+      title: "Delete Learning Graph",
       description:
-        "Remove an ontology from the backpack. Permanently deletes it and all its data. This cannot be undone.",
+        "Remove a learning graph from the backpack. Permanently deletes it and all its data. This cannot be undone.",
       annotations: { destructiveHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the ontology to delete"),
+        ontology: z.string().describe("Name of the learning graph to delete"),
       },
     },
     async ({ ontology }) => {
@@ -93,7 +93,7 @@ export function registerOntologyTools(
           content: [
             {
               type: "text" as const,
-              text: `Deleted ontology "${ontology}" and all its data.`,
+              text: `Deleted learning graph "${ontology}" and all its data.`,
             },
           ],
         };
@@ -111,12 +111,12 @@ export function registerOntologyTools(
   server.registerTool(
     "backpack_describe",
     {
-      title: "Describe Ontology",
+      title: "Describe Learning Graph",
       description:
-        "Look inside an ontology to see its structure: what types of things and relationships exist, with counts. No actual data is returned — use this to understand what's there before drilling in.",
+        "Look inside a learning graph to see its structure: what types of things and relationships exist, with counts. No actual data is returned — use this to understand what's there before drilling in.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the ontology to describe"),
+        ontology: z.string().describe("Name of the learning graph to describe"),
       },
     },
     async ({ ontology }) => {

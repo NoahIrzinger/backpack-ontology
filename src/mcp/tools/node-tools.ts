@@ -12,10 +12,10 @@ export function registerNodeTools(
     {
       title: "List Node Types",
       description:
-        "See what kinds of things are in an ontology, with counts. Useful for understanding what's there before browsing.",
+        "See what kinds of things are in a learning graph, with counts. Useful for understanding what's there before browsing.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the ontology"),
+        ontology: z.string().describe("Name of the learning graph"),
       },
     },
     async ({ ontology }) => {
@@ -43,10 +43,10 @@ export function registerNodeTools(
     {
       title: "List Nodes",
       description:
-        "Browse things in an ontology with pagination. Returns summaries (id, type, label) — not full details. Use backpack_get_node to get everything about a specific item.",
+        "Browse things in a learning graph with pagination. Returns summaries (id, type, label) — not full details. Use backpack_get_node to get everything about a specific item.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the ontology"),
+        ontology: z.string().describe("Name of the learning graph"),
         type: z
           .string()
           .optional()
@@ -90,10 +90,10 @@ export function registerNodeTools(
     {
       title: "Search Nodes",
       description:
-        "Search the backpack for matching items by text. Searches across all properties in an ontology (case-insensitive). Returns summaries.",
+        "Search the backpack for matching items by text. Searches across all properties in a learning graph (case-insensitive). Returns summaries.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the ontology"),
+        ontology: z.string().describe("Name of the learning graph"),
         query: z.string().describe("Text to search for"),
         type: z
           .string()
@@ -132,10 +132,10 @@ export function registerNodeTools(
     {
       title: "Get Node",
       description:
-        "Get the full details of a specific item in an ontology, including all its properties and relationships.",
+        "Get the full details of a specific item in a learning graph, including all its properties and relationships.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the ontology"),
+        ontology: z.string().describe("Name of the learning graph"),
         nodeId: z.string().describe("ID of the node to retrieve"),
       },
     },
@@ -164,9 +164,9 @@ export function registerNodeTools(
     {
       title: "Add Node",
       description:
-        "Add a new item to an ontology in the backpack. The type is freeform — use whatever makes sense for the domain. Properties are key-value pairs.",
+        "Add a new item to a learning graph in the backpack. The type is freeform — use whatever makes sense for the domain. Properties are key-value pairs.",
       inputSchema: {
-        ontology: z.string().describe("Name of the ontology"),
+        ontology: z.string().describe("Name of the learning graph"),
         type: z
           .string()
           .describe(
@@ -210,7 +210,7 @@ export function registerNodeTools(
       description:
         "Update an item's properties in the backpack. New properties are merged with existing ones (existing keys are overwritten, new keys are added, unmentioned keys are kept).",
       inputSchema: {
-        ontology: z.string().describe("Name of the ontology"),
+        ontology: z.string().describe("Name of the learning graph"),
         nodeId: z.string().describe("ID of the node to update"),
         properties: z
           .record(z.string(), z.unknown())
@@ -246,10 +246,10 @@ export function registerNodeTools(
     {
       title: "Remove Node",
       description:
-        "Remove an item and all its relationships from an ontology in the backpack.",
+        "Remove an item and all its relationships from a learning graph in the backpack.",
       annotations: { destructiveHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the ontology"),
+        ontology: z.string().describe("Name of the learning graph"),
         nodeId: z.string().describe("ID of the node to remove"),
       },
     },

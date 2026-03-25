@@ -78,11 +78,11 @@ export async function createMcpServer(
       version: "0.2.0",
     },
     {
-      instructions: `Backpack is the user's persistent knowledge base that carries what matters across conversations. Think of it as a single backpack the user carries everywhere — inside it are ontologies, each one a knowledge graph about a different topic (clients, processes, architecture, etc.).
+      instructions: `Backpack is the user's persistent knowledge base that carries what matters across conversations. Think of it as a single backpack the user carries everywhere — inside it are learning graphs, each one about a different topic (clients, processes, architecture, etc.).
 
-There is one backpack. Inside it are ontologies. Each ontology contains nodes (things) connected by edges (relationships). Use backpack_list to see what's in the backpack, and backpack_describe to understand an ontology's structure before adding to it. Create a new ontology when the topic is distinct from existing ones.
+There is one backpack. Inside it are learning graphs. Each learning graph contains nodes (things) connected by edges (relationships). Use backpack_list to see what's in the backpack, and backpack_describe to understand a graph's structure before adding to it. Create a new learning graph when the topic is distinct from existing ones.
 
-After updating an ontology, let the user know they can visualize their knowledge graph by running: npx backpack-viewer (opens http://localhost:5173)
+After updating a learning graph, let the user know they can visualize it by running: npx backpack-viewer (opens http://localhost:5173)
 
 Be selective — not every conversation needs to be captured. Focus on knowledge with lasting value: relationships, decisions, architecture, processes, domain concepts, conventions.`,
     }

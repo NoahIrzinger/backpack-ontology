@@ -12,9 +12,9 @@ export function registerBulkTools(
     {
       title: "Import Nodes",
       description:
-        "Add multiple items to an ontology in the backpack at once. Each item needs a type and properties.",
+        "Add multiple items to a learning graph in the backpack at once. Each item needs a type and properties.",
       inputSchema: {
-        ontology: z.string().describe("Name of the ontology"),
+        ontology: z.string().describe("Name of the learning graph"),
         nodes: z
           .array(
             z.object({

@@ -4,12 +4,12 @@
 
 ## What it does
 
-When you're working with Claude and something worth remembering comes up, Backpack saves it as a structured knowledge graph. Next time you ask, Claude already knows.
+When you're working with Claude and something worth remembering comes up, Backpack saves it as a structured learning graph. Next time you ask, Claude already knows.
 
 ```
 You: "We just signed Acme Corp, they're on the Enterprise tier, main contact is Sarah Chen"
 
-Claude: [saves to backpack → clients ontology]
+Claude: [saves to backpack → clients learning graph]
 
 --- weeks later, different conversation ---
 
@@ -60,7 +60,7 @@ No commands to learn. Just talk naturally.
 
 > "Add our new vendor agreement details to backpack"
 
-> "Start an ontology for our hiring process"
+> "Start a learning graph for our hiring process"
 
 ### Find something
 
@@ -72,11 +72,11 @@ No commands to learn. Just talk naturally.
 
 ### See the big picture
 
-> "Show me my knowledge graph"
+> "Show me my learning graph"
 
 > "What's in my backpack?"
 
-> "Describe the clients ontology"
+> "Describe the clients graph"
 
 Claude will open the graph visualizer so you can explore your knowledge visually.
 
@@ -90,7 +90,7 @@ Claude will open the graph visualizer so you can explore your knowledge visually
 
 ## How it works
 
-You have one backpack. It goes everywhere with you. Inside it, you organize knowledge into **ontologies**, each covering a different topic (clients, processes, compliance, etc.). Within each ontology, information is stored as things connected by relationships. You don't need to think about the structure. Claude handles it automatically.
+You have one backpack. It goes everywhere with you. Inside it, you organize knowledge into **learning graphs**, each covering a different topic (clients, processes, compliance, etc.). Within each graph, information is stored as things connected by relationships. You don't need to think about the structure. Claude handles it automatically.
 
 ## Data and privacy
 
@@ -108,7 +108,7 @@ You have one backpack. It goes everywhere with you. Inside it, you organize know
 |---|---|
 | `npx backpack-ontology@latest` | Start the Backpack Local MCP server |
 | `claude mcp add backpack-app ... --transport sse` | Connect to Backpack App cloud MCP |
-| `npx -p backpack-ontology@latest backpack-sync` | Upload local ontologies to Backpack App |
+| `npx -p backpack-ontology@latest backpack-sync` | Upload local learning graphs to Backpack App |
 | `npx backpack-viewer` | Open the graph visualizer (http://localhost:5173) |
 | `npx -p backpack-ontology@latest backpack-init` | Reinstall auto-capture hooks if removed |
 
@@ -119,7 +119,7 @@ Claude uses these automatically. You don't need to call them directly.
 | What Claude does | How |
 |---|---|
 | See what's in the backpack | `backpack_list`, `backpack_describe` |
-| Add a new ontology | `backpack_create` |
+| Add a new learning graph | `backpack_create` |
 | Find something | `backpack_search`, `backpack_list_nodes` |
 | Get full details on an item | `backpack_get_node`, `backpack_get_neighbors` |
 | Add or update knowledge | `backpack_add_node`, `backpack_update_node`, `backpack_add_edge` |
