@@ -99,13 +99,6 @@ export interface NeighborResult {
   neighbors: NeighborEntry[];
 }
 
-// --- Learning graph aliases ---
-// Preferred names for user-facing code. The Ontology* names are kept for backward compatibility.
-
-export type LearningGraphMetadata = OntologyMetadata;
-export type LearningGraphData = OntologyData;
-export type LearningGraphSummary = OntologySummary;
-
 // --- Pluggable storage interface ---
 
 /**
