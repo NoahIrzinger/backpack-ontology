@@ -19,8 +19,7 @@ import type { Backpack } from "./backpack.js";
 
 const ENDPOINT =
   process.env.BACKPACK_TELEMETRY_URL ?? "https://diagnostics.backpackontology.com/api/telemetry";
-const FLUSH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const VERSION = "0.1.3";
+const VERSION = "0.2.14";
 
 interface TelemetryEvent {
   event: string;
@@ -34,12 +33,11 @@ interface TelemetryEvent {
 const sessionId = crypto.randomUUID();
 const sessionStartTime = Date.now();
 let machineId: string | null = null;
-let eventQueue: TelemetryEvent[] = [];
-let toolCallCount = 0;
-let flushTimer: ReturnType<typeof setInterval> | null = null;
+let toolCalls: Record<string, number> = {};
 let disabled: boolean | null = null;
 let backpackRef: Backpack | null = null;
 let initialized = false;
+let shutdownCalled = false;
 
 async function isDisabled(): Promise<boolean> {
   if (disabled !== null) return disabled;
@@ -115,18 +113,6 @@ function showFirstRunNotice(): void {
   );
 }
 
-function enqueue(event: string, properties: Record<string, unknown>): void {
-  if (!machineId) return;
-
-  eventQueue.push({
-    event,
-    machineId,
-    sessionId,
-    timestamp: new Date().toISOString(),
-    properties,
-  });
-}
-
 /** Initialize telemetry. Call once at server startup. */
 export async function initTelemetry(backpack?: Backpack): Promise<void> {
   try {
@@ -136,24 +122,9 @@ export async function initTelemetry(backpack?: Backpack): Promise<void> {
     await getMachineId();
     initialized = true;
 
-    enqueue("session_start", {
-      nodeVersion: process.version,
-      os: os.platform(),
-      arch: os.arch(),
-      backpackVersion: VERSION,
-    });
-
-    // Flush immediately so session_start is sent right away
-    flush().catch(() => {});
-
-    flushTimer = setInterval(() => {
-      flush().catch(() => {});
-    }, FLUSH_INTERVAL_MS);
-    flushTimer.unref();
-
-    process.on("beforeExit", () => {
-      shutdown().catch(() => {});
-    });
+    // Register shutdown — SIGTERM/SIGINT only, not beforeExit (fires repeatedly)
+    process.on("SIGTERM", () => shutdown().catch(() => {}));
+    process.on("SIGINT", () => shutdown().catch(() => {}));
   } catch {
     // Telemetry init failed — continue silently
   }
@@ -166,68 +137,66 @@ export function trackEvent(
 ): void {
   try {
     if (disabled || !initialized) return;
-    if (event === "tool_call") toolCallCount++;
-    enqueue(event, properties);
+    if (event === "tool_call") {
+      const tool = (properties.tool as string) ?? "unknown";
+      toolCalls[tool] = (toolCalls[tool] ?? 0) + 1;
+    }
+    // Individual events are no longer sent — aggregated at shutdown
   } catch {
     // Silently ignore
   }
 }
 
-/** Flush the event queue to the ingest endpoint. */
-export async function flush(): Promise<void> {
-  try {
-    if (eventQueue.length === 0) return;
-
-    const batch = eventQueue;
-    eventQueue = [];
-
-    await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ events: batch }),
-      signal: AbortSignal.timeout(5000),
-    });
-  } catch {
-    // Failed to send — drop the batch
-  }
-}
-
-/** Gather final stats and flush. Call on server shutdown. */
+/** Gather final stats and send one aggregated event. Call on server shutdown. */
 export async function shutdown(): Promise<void> {
   try {
-    if (disabled || !initialized) return;
+    if (disabled || !initialized || shutdownCalled) return;
+    shutdownCalled = true;
 
-    if (flushTimer) {
-      clearInterval(flushTimer);
-      flushTimer = null;
-    }
+    const totalToolCalls = Object.values(toolCalls).reduce((a, b) => a + b, 0);
 
     // Gather aggregate ontology stats
+    let ontologyCount = 0;
+    let totalNodes = 0;
+    let totalEdges = 0;
     if (backpackRef) {
       try {
         const ontologies = await backpackRef.listOntologies();
-        let totalNodes = 0;
-        let totalEdges = 0;
+        ontologyCount = ontologies.length;
         for (const o of ontologies) {
           totalNodes += o.nodeCount;
           totalEdges += o.edgeCount;
         }
-        enqueue("ontology_stats", {
-          ontologyCount: ontologies.length,
-          totalNodes,
-          totalEdges,
-        });
       } catch {
         // Can't gather stats — skip
       }
     }
 
-    enqueue("session_end", {
-      durationMs: Date.now() - sessionStartTime,
-      toolCalls: toolCallCount,
-    });
+    const summary: TelemetryEvent = {
+      event: "session_summary",
+      machineId: machineId!,
+      sessionId,
+      timestamp: new Date().toISOString(),
+      properties: {
+        durationMs: Date.now() - sessionStartTime,
+        toolCalls,
+        totalToolCalls,
+        ontologyCount,
+        totalNodes,
+        totalEdges,
+        nodeVersion: process.version,
+        os: os.platform(),
+        arch: os.arch(),
+        backpackVersion: VERSION,
+      },
+    };
 
-    await flush();
+    await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ events: [summary] }),
+      signal: AbortSignal.timeout(5000),
+    });
   } catch {
     // Silently ignore
   }
