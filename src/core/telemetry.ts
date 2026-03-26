@@ -29,6 +29,8 @@ interface TelemetryEvent {
   properties: Record<string, unknown>;
 }
 
+const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
 // Module-level state
 const sessionId = crypto.randomUUID();
 const sessionStartTime = Date.now();
@@ -38,6 +40,7 @@ let disabled: boolean | null = null;
 let backpackRef: Backpack | null = null;
 let initialized = false;
 let shutdownCalled = false;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 async function isDisabled(): Promise<boolean> {
   if (disabled !== null) return disabled;
@@ -113,6 +116,54 @@ function showFirstRunNotice(): void {
   );
 }
 
+/** Send events to the diagnostics endpoint. Never throws. */
+async function sendEvents(events: TelemetryEvent[]): Promise<void> {
+  await fetch(ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ events }),
+    signal: AbortSignal.timeout(5000),
+  });
+}
+
+/** Build the current session snapshot (reused by heartbeat and shutdown). */
+async function buildSnapshot(event: string): Promise<TelemetryEvent> {
+  let ontologyCount = 0;
+  let totalNodes = 0;
+  let totalEdges = 0;
+  if (backpackRef) {
+    try {
+      const ontologies = await backpackRef.listOntologies();
+      ontologyCount = ontologies.length;
+      for (const o of ontologies) {
+        totalNodes += o.nodeCount;
+        totalEdges += o.edgeCount;
+      }
+    } catch {
+      // Can't gather stats — skip
+    }
+  }
+
+  return {
+    event,
+    machineId: machineId!,
+    sessionId,
+    timestamp: new Date().toISOString(),
+    properties: {
+      durationMs: Date.now() - sessionStartTime,
+      toolCalls,
+      totalToolCalls: Object.values(toolCalls).reduce((a, b) => a + b, 0),
+      ontologyCount,
+      totalNodes,
+      totalEdges,
+      nodeVersion: process.version,
+      os: os.platform(),
+      arch: os.arch(),
+      backpackVersion: VERSION,
+    },
+  };
+}
+
 /** Initialize telemetry. Call once at server startup. */
 export async function initTelemetry(backpack?: Backpack): Promise<void> {
   try {
@@ -121,6 +172,21 @@ export async function initTelemetry(backpack?: Backpack): Promise<void> {
     backpackRef = backpack ?? null;
     await getMachineId();
     initialized = true;
+
+    // Send session_start immediately
+    const startEvent = await buildSnapshot("session_start");
+    await sendEvents([startEvent]);
+
+    // Periodic heartbeat
+    heartbeatTimer = setInterval(async () => {
+      try {
+        const heartbeat = await buildSnapshot("session_heartbeat");
+        await sendEvents([heartbeat]);
+      } catch {
+        // Silently ignore heartbeat failures
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+    heartbeatTimer.unref(); // Don't keep the process alive for heartbeats
 
     // Register shutdown — SIGTERM/SIGINT only, not beforeExit (fires repeatedly)
     process.on("SIGTERM", () => shutdown().catch(() => {}));
@@ -153,50 +219,13 @@ export async function shutdown(): Promise<void> {
     if (disabled || !initialized || shutdownCalled) return;
     shutdownCalled = true;
 
-    const totalToolCalls = Object.values(toolCalls).reduce((a, b) => a + b, 0);
-
-    // Gather aggregate ontology stats
-    let ontologyCount = 0;
-    let totalNodes = 0;
-    let totalEdges = 0;
-    if (backpackRef) {
-      try {
-        const ontologies = await backpackRef.listOntologies();
-        ontologyCount = ontologies.length;
-        for (const o of ontologies) {
-          totalNodes += o.nodeCount;
-          totalEdges += o.edgeCount;
-        }
-      } catch {
-        // Can't gather stats — skip
-      }
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
     }
 
-    const summary: TelemetryEvent = {
-      event: "session_summary",
-      machineId: machineId!,
-      sessionId,
-      timestamp: new Date().toISOString(),
-      properties: {
-        durationMs: Date.now() - sessionStartTime,
-        toolCalls,
-        totalToolCalls,
-        ontologyCount,
-        totalNodes,
-        totalEdges,
-        nodeVersion: process.version,
-        os: os.platform(),
-        arch: os.arch(),
-        backpackVersion: VERSION,
-      },
-    };
-
-    await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ events: [summary] }),
-      signal: AbortSignal.timeout(5000),
-    });
+    const summary = await buildSnapshot("session_end");
+    await sendEvents([summary]);
   } catch {
     // Silently ignore
   }
