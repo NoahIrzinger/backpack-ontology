@@ -118,12 +118,16 @@ function showFirstRunNotice(): void {
 
 /** Send events to the diagnostics endpoint. Never throws. */
 async function sendEvents(events: TelemetryEvent[]): Promise<void> {
-  await fetch(ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ events }),
-    signal: AbortSignal.timeout(5000),
-  });
+  try {
+    await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ events }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    // Network failures are expected (offline, DNS, etc.) — silently ignore
+  }
 }
 
 /** Build the current session snapshot (reused by heartbeat and shutdown). */
@@ -173,11 +177,11 @@ export async function initTelemetry(backpack?: Backpack): Promise<void> {
     await getMachineId();
     initialized = true;
 
-    // Send session_start immediately
-    const startEvent = await buildSnapshot("session_start");
-    await sendEvents([startEvent]);
+    // Register shutdown + heartbeat first — these must always be set up,
+    // even if the session_start send below fails.
+    process.on("SIGTERM", () => shutdown().catch(() => {}));
+    process.on("SIGINT", () => shutdown().catch(() => {}));
 
-    // Periodic heartbeat
     heartbeatTimer = setInterval(async () => {
       try {
         const heartbeat = await buildSnapshot("session_heartbeat");
@@ -188,9 +192,9 @@ export async function initTelemetry(backpack?: Backpack): Promise<void> {
     }, HEARTBEAT_INTERVAL_MS);
     heartbeatTimer.unref(); // Don't keep the process alive for heartbeats
 
-    // Register shutdown — SIGTERM/SIGINT only, not beforeExit (fires repeatedly)
-    process.on("SIGTERM", () => shutdown().catch(() => {}));
-    process.on("SIGINT", () => shutdown().catch(() => {}));
+    // Send session_start (sendEvents never throws, so this is safe)
+    const startEvent = await buildSnapshot("session_start");
+    await sendEvents([startEvent]);
   } catch {
     // Telemetry init failed — continue silently
   }
