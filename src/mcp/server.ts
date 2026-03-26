@@ -82,9 +82,13 @@ export async function createMcpServer(
 
 There is one backpack. Inside it are learning graphs. Each learning graph contains nodes (things) connected by edges (relationships). Use backpack_list to see what's in the backpack, and backpack_describe to understand a graph's structure before adding to it. Create a new learning graph when the topic is distinct from existing ones.
 
-After updating a learning graph, let the user know they can visualize it by running: npx backpack-viewer (opens http://localhost:5173)
+Viewer links: when the user asks to see a graph, show a graph, or wants a link, construct a clickable URL.
+- Graph link: http://localhost:5173#graph-name
+- Graph with focused nodes: http://localhost:5173#graph-name?node=nodeId1,nodeId2
+Always provide these as clickable markdown links, e.g. [View graph](http://localhost:5173#my-graph)
+If the viewer isn't running, tell the user to start it with: npx backpack-viewer
 
-Deep links: when showing the user specific nodes, include a viewer URL so they can jump directly to them. Format: http://localhost:5173#graph-name?node=nodeId1,nodeId2 — this opens the viewer, loads the graph, and focuses on those nodes.
+After updating a learning graph, include a link to view it.
 
 Be selective — not every conversation needs to be captured. Focus on knowledge with lasting value: relationships, decisions, architecture, processes, domain concepts, conventions.`,
     }
