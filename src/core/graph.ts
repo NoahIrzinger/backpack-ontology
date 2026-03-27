@@ -12,7 +12,9 @@ import type {
   NeighborEntry,
   NeighborResult,
   GraphStats,
+  GraphAudit,
   NodeDegree,
+  SparseType,
 } from "./types.js";
 
 /**
@@ -279,6 +281,112 @@ export class Graph {
       typeConnections: [...typePairs.entries()]
         .map(([types, count]) => ({ types, count }))
         .sort((a, b) => b.count - a.count),
+    };
+  }
+
+  /** Audit the graph and produce a structured improvement report. */
+  audit(): GraphAudit {
+    const stats = this.getStats();
+    const suggestions: string[] = [];
+
+    // Per-type connection stats
+    const typeNodes = new Map<string, string[]>();
+    const typeConnectionSum = new Map<string, number>();
+    for (const n of this.data.nodes) {
+      const list = typeNodes.get(n.type) ?? [];
+      list.push(n.id);
+      typeNodes.set(n.type, list);
+    }
+    const connectionCounts = new Map<string, number>();
+    for (const e of this.data.edges) {
+      connectionCounts.set(e.sourceId, (connectionCounts.get(e.sourceId) ?? 0) + 1);
+      connectionCounts.set(e.targetId, (connectionCounts.get(e.targetId) ?? 0) + 1);
+    }
+    for (const [type, ids] of typeNodes) {
+      const sum = ids.reduce((acc, id) => acc + (connectionCounts.get(id) ?? 0), 0);
+      typeConnectionSum.set(type, sum / ids.length);
+    }
+
+    // Weak nodes: connected but well below their type average
+    const weakNodes: NodeDegree[] = [];
+    for (const n of this.data.nodes) {
+      const conns = connectionCounts.get(n.id) ?? 0;
+      const typeAvg = typeConnectionSum.get(n.type) ?? 0;
+      if (conns > 0 && conns < typeAvg * 0.5 && typeAvg >= 2) {
+        weakNodes.push({ id: n.id, label: this.nodeLabel(n), type: n.type, connections: conns });
+      }
+    }
+    weakNodes.sort((a, b) => a.connections - b.connections);
+
+    // Sparse types: types with low intra-type edge density
+    const typeIntraEdges = new Map<string, number>();
+    for (const e of this.data.edges) {
+      const sType = this.getNode(e.sourceId)?.type;
+      const tType = this.getNode(e.targetId)?.type;
+      if (sType && sType === tType) {
+        typeIntraEdges.set(sType, (typeIntraEdges.get(sType) ?? 0) + 1);
+      }
+    }
+    const sparseTypes: SparseType[] = [];
+    for (const [type, ids] of typeNodes) {
+      if (ids.length < 2) continue;
+      const intra = typeIntraEdges.get(type) ?? 0;
+      const avg = typeConnectionSum.get(type) ?? 0;
+      if (avg < 1.5) {
+        sparseTypes.push({ type, nodes: ids.length, intraEdges: intra, avgConnections: Math.round(avg * 10) / 10 });
+      }
+    }
+    sparseTypes.sort((a, b) => a.avgConnections - b.avgConnections);
+
+    // Disconnected type pairs: types with nodes but no edges between them
+    const typePairsWithEdges = new Set<string>();
+    for (const e of this.data.edges) {
+      const sType = this.getNode(e.sourceId)?.type;
+      const tType = this.getNode(e.targetId)?.type;
+      if (sType && tType && sType !== tType) {
+        typePairsWithEdges.add([sType, tType].sort().join("<->"));
+      }
+    }
+    const types = [...typeNodes.keys()];
+    const disconnectedTypePairs: GraphAudit["disconnectedTypePairs"] = [];
+    for (let i = 0; i < types.length; i++) {
+      for (let j = i + 1; j < types.length; j++) {
+        const key = [types[i], types[j]].sort().join("<->");
+        if (!typePairsWithEdges.has(key)) {
+          disconnectedTypePairs.push({
+            typeA: types[i],
+            typeB: types[j],
+            nodesA: typeNodes.get(types[i])!.length,
+            nodesB: typeNodes.get(types[j])!.length,
+          });
+        }
+      }
+    }
+
+    // Generate suggestions
+    if (stats.orphanCount > 0) {
+      const orphanTypes = [...new Set(stats.orphans.map((o) => o.type))];
+      suggestions.push(`${stats.orphanCount} orphan node(s) have no connections — types: ${orphanTypes.join(", ")}. Use backpack_connect to add edges.`);
+    }
+    if (weakNodes.length > 0) {
+      suggestions.push(`${weakNodes.length} node(s) have far fewer connections than their type average. Consider adding edges to: ${weakNodes.slice(0, 5).map((n) => n.label).join(", ")}.`);
+    }
+    for (const st of sparseTypes.slice(0, 3)) {
+      suggestions.push(`${st.type} type has ${st.nodes} nodes but avg ${st.avgConnections} connections — consider adding more relationships.`);
+    }
+    for (const dp of disconnectedTypePairs.slice(0, 3)) {
+      suggestions.push(`${dp.typeA} and ${dp.typeB} have no edges between them (${dp.nodesA} and ${dp.nodesB} nodes). Consider if they should be connected.`);
+    }
+    if (suggestions.length === 0) {
+      suggestions.push("Graph looks well-connected. No obvious improvements found.");
+    }
+
+    return {
+      orphans: stats.orphans,
+      weakNodes: weakNodes.slice(0, 20),
+      sparseTypes,
+      disconnectedTypePairs,
+      suggestions,
     };
   }
 

@@ -372,6 +372,42 @@ describe("Graph", () => {
     });
   });
 
+  describe("audit", () => {
+    it("identifies orphans, weak nodes, and disconnected type pairs", () => {
+      const a = graph.addNode("Person", { name: "Alice" });
+      const b = graph.addNode("Person", { name: "Bob" });
+      const c = graph.addNode("Person", { name: "Carol" });
+      graph.addNode("Ship", { name: "Enterprise" }); // orphan, disconnected type
+      graph.addEdge("KNOWS", a.id, b.id);
+      graph.addEdge("KNOWS", a.id, c.id);
+      graph.addEdge("KNOWS", b.id, c.id);
+
+      const audit = graph.audit();
+
+      expect(audit.orphans.length).toBe(1);
+      expect(audit.orphans[0].label).toBe("Enterprise");
+      expect(audit.disconnectedTypePairs.length).toBe(1);
+      expect(audit.disconnectedTypePairs[0].typeA).toBeDefined();
+      expect(audit.suggestions.length).toBeGreaterThan(0);
+      expect(audit.suggestions.some((s) => s.includes("orphan"))).toBe(true);
+      expect(audit.suggestions.some((s) => s.includes("no edges between"))).toBe(true);
+    });
+
+    it("returns clean report for well-connected graph", () => {
+      const a = graph.addNode("Person", { name: "Alice" });
+      const b = graph.addNode("Person", { name: "Bob" });
+      const c = graph.addNode("Person", { name: "Carol" });
+      graph.addEdge("KNOWS", a.id, b.id);
+      graph.addEdge("KNOWS", b.id, c.id);
+      graph.addEdge("KNOWS", a.id, c.id);
+
+      const audit = graph.audit();
+
+      expect(audit.orphans.length).toBe(0);
+      expect(audit.suggestions.some((s) => s.includes("well-connected"))).toBe(true);
+    });
+  });
+
   describe("importEdges", () => {
     it("bulk-creates edges between existing nodes", () => {
       const a = graph.addNode("Person", { name: "Alice" });

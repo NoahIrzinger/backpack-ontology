@@ -138,4 +138,35 @@ export function registerOntologyTools(
       }
     }
   );
+
+  server.registerTool(
+    "backpack_audit",
+    {
+      title: "Audit Learning Graph",
+      description:
+        "Analyze a learning graph for quality issues and suggest improvements. Returns orphan nodes, weak nodes, sparse types, disconnected type pairs, and actionable suggestions. Use this before improving an existing graph.",
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph to audit"),
+      },
+    },
+    async ({ ontology }) => {
+      try {
+        const audit = await backpack.auditOntology(ontology);
+        trackEvent("tool_call", { tool: "backpack_audit" });
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(audit, null, 2) },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
 }

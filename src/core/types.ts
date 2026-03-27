@@ -123,6 +123,30 @@ export interface GraphStats {
   typeConnections: TypeConnection[];
 }
 
+// --- Audit types ---
+
+export interface SparseType {
+  type: string;
+  nodes: number;
+  intraEdges: number;
+  avgConnections: number;
+}
+
+export interface DisconnectedTypePair {
+  typeA: string;
+  typeB: string;
+  nodesA: number;
+  nodesB: number;
+}
+
+export interface GraphAudit {
+  orphans: NodeDegree[];
+  weakNodes: NodeDegree[];
+  sparseTypes: SparseType[];
+  disconnectedTypePairs: DisconnectedTypePair[];
+  suggestions: string[];
+}
+
 // --- Pluggable storage interface ---
 
 /**

@@ -13,6 +13,7 @@ import type {
   GetNodeResult,
   NeighborResult,
   GraphStats,
+  GraphAudit,
 } from "./types.js";
 
 /**
@@ -232,6 +233,11 @@ export class Backpack {
       edgeCount: result.edgeIds.length,
       edgeIds: result.edgeIds,
     };
+  }
+
+  async auditOntology(name: string): Promise<GraphAudit> {
+    const graph = await this.getGraph(name);
+    return graph.audit();
   }
 
   async connectEdges(
