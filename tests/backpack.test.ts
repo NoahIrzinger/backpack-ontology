@@ -145,6 +145,53 @@ describe("Backpack (end-to-end)", () => {
     expect(list.total).toBe(3);
   });
 
+  it("bulk import nodes with edges", async () => {
+    await backpack.createOntology("test", "Test");
+
+    const result = await backpack.importNodes(
+      "test",
+      [
+        { type: "Recipe", properties: { name: "Aglio e Olio" } },
+        { type: "Ingredient", properties: { name: "garlic" } },
+        { type: "Ingredient", properties: { name: "olive oil" } },
+      ],
+      [
+        { type: "USES", source: 0, target: 1 },
+        { type: "USES", source: 0, target: 2 },
+        { type: "PAIRS_WITH", source: 1, target: 2 },
+      ]
+    );
+
+    expect(result.count).toBe(3);
+    expect(result.ids.length).toBe(3);
+    expect(result.edgeCount).toBe(3);
+    expect(result.edgeIds.length).toBe(3);
+
+    // Verify edges exist via neighbor traversal
+    const neighbors = await backpack.getNeighbors("test", result.ids[0]);
+    expect(neighbors.neighbors.length).toBe(2); // garlic + olive oil
+
+    // Verify persistence
+    const freshBackend = new JsonFileBackend(tmpDir);
+    const freshBackpack = new Backpack(freshBackend);
+    await freshBackpack.initialize();
+    const desc = await freshBackpack.describeOntology("test");
+    expect(desc.nodeCount).toBe(3);
+    expect(desc.edgeCount).toBe(3);
+  });
+
+  it("bulk import without edges returns zero edge counts", async () => {
+    await backpack.createOntology("test", "Test");
+
+    const result = await backpack.importNodes("test", [
+      { type: "Person", properties: { name: "Alice" } },
+    ]);
+
+    expect(result.count).toBe(1);
+    expect(result.edgeCount).toBe(0);
+    expect(result.edgeIds).toEqual([]);
+  });
+
   it("describe ontology returns structure without instance data", async () => {
     await backpack.createOntology("test", "Test");
     await backpack.addNode("test", "Person", { name: "Alice" });

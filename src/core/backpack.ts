@@ -212,15 +212,22 @@ export class Backpack {
 
   async importNodes(
     ontologyName: string,
-    nodes: Array<{ type: string; properties: Record<string, unknown> }>
-  ): Promise<{ count: number; ids: string[] }> {
+    nodes: Array<{ type: string; properties: Record<string, unknown> }>,
+    edges?: Array<{
+      type: string;
+      source: number | string;
+      target: number | string;
+      properties?: Record<string, unknown>;
+    }>
+  ): Promise<{ count: number; ids: string[]; edgeCount: number; edgeIds: string[] }> {
     const graph = await this.getGraph(ontologyName);
-    const ids: string[] = [];
-    for (const { type, properties } of nodes) {
-      const node = graph.addNode(type, properties);
-      ids.push(node.id);
-    }
+    const result = graph.importNodesAndEdges(nodes, edges);
     await this.persist(ontologyName);
-    return { count: ids.length, ids };
+    return {
+      count: result.nodeIds.length,
+      ids: result.nodeIds,
+      edgeCount: result.edgeIds.length,
+      edgeIds: result.edgeIds,
+    };
   }
 }

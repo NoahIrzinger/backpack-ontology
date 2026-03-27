@@ -216,6 +216,133 @@ describe("Graph", () => {
     });
   });
 
+  describe("importNodesAndEdges", () => {
+    it("imports nodes with edges by index", () => {
+      const result = graph.importNodesAndEdges(
+        [
+          { type: "Person", properties: { name: "Alice" } },
+          { type: "Person", properties: { name: "Bob" } },
+          { type: "Company", properties: { name: "Acme" } },
+        ],
+        [
+          { type: "KNOWS", source: 0, target: 1 },
+          { type: "WORKS_AT", source: 0, target: 2 },
+          { type: "WORKS_AT", source: 1, target: 2 },
+        ]
+      );
+
+      expect(result.nodeIds.length).toBe(3);
+      expect(result.edgeIds.length).toBe(3);
+      expect(result.nodeIds.every((id) => id.startsWith("n_"))).toBe(true);
+      expect(result.edgeIds.every((id) => id.startsWith("e_"))).toBe(true);
+
+      // Verify edges point to correct nodes
+      const edge0 = graph.getEdge(result.edgeIds[0])!;
+      expect(edge0.sourceId).toBe(result.nodeIds[0]);
+      expect(edge0.targetId).toBe(result.nodeIds[1]);
+    });
+
+    it("imports edges referencing existing nodes by string ID", () => {
+      const existing = graph.addNode("City", { name: "Berlin" });
+
+      const result = graph.importNodesAndEdges(
+        [{ type: "Person", properties: { name: "Alice" } }],
+        [{ type: "LIVES_IN", source: 0, target: existing.id }]
+      );
+
+      expect(result.edgeIds.length).toBe(1);
+      const edge = graph.getEdge(result.edgeIds[0])!;
+      expect(edge.sourceId).toBe(result.nodeIds[0]);
+      expect(edge.targetId).toBe(existing.id);
+    });
+
+    it("handles mixed references (index + string ID)", () => {
+      const existing = graph.addNode("Company", { name: "Acme" });
+
+      const result = graph.importNodesAndEdges(
+        [
+          { type: "Person", properties: { name: "Alice" } },
+          { type: "Person", properties: { name: "Bob" } },
+        ],
+        [
+          { type: "WORKS_AT", source: 0, target: existing.id },
+          { type: "KNOWS", source: 0, target: 1 },
+        ]
+      );
+
+      expect(result.edgeIds.length).toBe(2);
+    });
+
+    it("imports nodes without edges (backward compat)", () => {
+      const result = graph.importNodesAndEdges([
+        { type: "Person", properties: { name: "Alice" } },
+        { type: "Person", properties: { name: "Bob" } },
+      ]);
+
+      expect(result.nodeIds.length).toBe(2);
+      expect(result.edgeIds.length).toBe(0);
+    });
+
+    it("throws on out-of-bounds source index, zero mutations", () => {
+      const nodesBefore = graph.data.nodes.length;
+
+      expect(() =>
+        graph.importNodesAndEdges(
+          [{ type: "Person", properties: { name: "Alice" } }],
+          [{ type: "KNOWS", source: 5, target: 0 }]
+        )
+      ).toThrow("source index 5 is out of bounds");
+
+      expect(graph.data.nodes.length).toBe(nodesBefore);
+    });
+
+    it("throws on out-of-bounds target index", () => {
+      expect(() =>
+        graph.importNodesAndEdges(
+          [{ type: "Person", properties: { name: "Alice" } }],
+          [{ type: "KNOWS", source: 0, target: 3 }]
+        )
+      ).toThrow("target index 3 is out of bounds");
+    });
+
+    it("throws on nonexistent string ID reference, zero mutations", () => {
+      const nodesBefore = graph.data.nodes.length;
+
+      expect(() =>
+        graph.importNodesAndEdges(
+          [{ type: "Person", properties: { name: "Alice" } }],
+          [{ type: "KNOWS", source: 0, target: "n_doesnotexist" }]
+        )
+      ).toThrow("target node not found: n_doesnotexist");
+
+      expect(graph.data.nodes.length).toBe(nodesBefore);
+    });
+
+    it("imports edges with properties", () => {
+      const result = graph.importNodesAndEdges(
+        [
+          { type: "Person", properties: { name: "Alice" } },
+          { type: "Person", properties: { name: "Bob" } },
+        ],
+        [{ type: "KNOWS", source: 0, target: 1, properties: { since: "2024", weight: 0.8 } }]
+      );
+
+      const edge = graph.getEdge(result.edgeIds[0])!;
+      expect(edge.properties).toEqual({ since: "2024", weight: 0.8 });
+    });
+
+    it("allows self-referential edges", () => {
+      const result = graph.importNodesAndEdges(
+        [{ type: "Task", properties: { name: "Review" } }],
+        [{ type: "BLOCKS", source: 0, target: 0 }]
+      );
+
+      expect(result.edgeIds.length).toBe(1);
+      const edge = graph.getEdge(result.edgeIds[0])!;
+      expect(edge.sourceId).toBe(edge.targetId);
+    });
+  });
+
   describe("neighbors (graph traversal)", () => {
     it("finds immediate neighbors", () => {
       const a = graph.addNode("Person", { name: "A" });

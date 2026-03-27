@@ -73,6 +73,62 @@ export class Graph {
     return node;
   }
 
+  /**
+   * Bulk-import nodes and optionally edges in a single atomic operation.
+   * Edges reference new nodes by array index (number) or existing nodes by ID (string).
+   * Pre-validates all edge references before creating anything (all-or-nothing).
+   */
+  importNodesAndEdges(
+    nodes: Array<{ type: string; properties: Record<string, unknown> }>,
+    edges?: Array<{
+      type: string;
+      source: number | string;
+      target: number | string;
+      properties?: Record<string, unknown>;
+    }>
+  ): { nodeIds: string[]; edgeIds: string[] } {
+    // Pre-validate edge references before any mutations
+    if (edges) {
+      for (let i = 0; i < edges.length; i++) {
+        const { source, target } = edges[i];
+        if (typeof source === "number") {
+          if (source < 0 || source >= nodes.length)
+            throw new Error(`Edge at index ${i}: source index ${source} is out of bounds (${nodes.length} nodes provided)`);
+        } else {
+          if (!this.getNode(source))
+            throw new Error(`Edge at index ${i}: source node not found: ${source}`);
+        }
+        if (typeof target === "number") {
+          if (target < 0 || target >= nodes.length)
+            throw new Error(`Edge at index ${i}: target index ${target} is out of bounds (${nodes.length} nodes provided)`);
+        } else {
+          if (!this.getNode(target))
+            throw new Error(`Edge at index ${i}: target node not found: ${target}`);
+        }
+      }
+    }
+
+    // Phase 1: create all nodes
+    const nodeIds: string[] = [];
+    for (const { type, properties } of nodes) {
+      const node = this.addNode(type, properties);
+      nodeIds.push(node.id);
+    }
+
+    // Phase 2: resolve references and create edges
+    const edgeIds: string[] = [];
+    if (edges) {
+      for (const { type, source, target, properties } of edges) {
+        const sourceId = typeof source === "number" ? nodeIds[source] : source;
+        const targetId = typeof target === "number" ? nodeIds[target] : target;
+        const edge = this.addEdge(type, sourceId, targetId, properties ?? {});
+        edgeIds.push(edge.id);
+      }
+    }
+
+    return { nodeIds, edgeIds };
+  }
+
   getNode(id: string): Node | undefined {
     return this.data.nodes.find((n) => n.id === id);
   }
