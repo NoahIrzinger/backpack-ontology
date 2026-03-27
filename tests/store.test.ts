@@ -19,8 +19,8 @@ describe("JsonFileBackend", () => {
   });
 
   it("initializes the directory structure", async () => {
-    const ontologiesDir = path.join(tmpDir, "ontologies");
-    const stat = await fs.stat(ontologiesDir);
+    const graphsDir = path.join(tmpDir, "graphs");
+    const stat = await fs.stat(graphsDir);
     expect(stat.isDirectory()).toBe(true);
   });
 
@@ -97,9 +97,103 @@ describe("JsonFileBackend", () => {
     await expect(store.deleteOntology("nope")).rejects.toThrow("not found");
   });
 
+  it("creates and lists branches", async () => {
+    await store.createOntology("test", "Test");
+    await store.createBranch("test", "experiment");
+
+    const branches = await store.listBranches("test");
+    expect(branches.length).toBe(2);
+    expect(branches.find((b: any) => b.name === "main")?.active).toBe(true);
+    expect(branches.find((b: any) => b.name === "experiment")?.active).toBe(false);
+  });
+
+  it("switches branches", async () => {
+    await store.createOntology("test", "Test");
+    await store.createBranch("test", "v2");
+    await store.switchBranch("test", "v2");
+
+    const branches = await store.listBranches("test");
+    expect(branches.find((b: any) => b.name === "v2")?.active).toBe(true);
+    expect(branches.find((b: any) => b.name === "main")?.active).toBe(false);
+  });
+
+  it("deletes non-active branch", async () => {
+    await store.createOntology("test", "Test");
+    await store.createBranch("test", "temp");
+    await store.deleteBranch("test", "temp");
+
+    const branches = await store.listBranches("test");
+    expect(branches.length).toBe(1);
+  });
+
+  it("refuses to delete active branch", async () => {
+    await store.createOntology("test", "Test");
+    await expect(store.deleteBranch("test", "main")).rejects.toThrow("active");
+  });
+
+  it("creates and lists snapshots", async () => {
+    await store.createOntology("test", "Test");
+    const v1 = await store.createSnapshot("test", "initial");
+    expect(v1).toBe(1);
+
+    const v2 = await store.createSnapshot("test");
+    expect(v2).toBe(2);
+
+    const list = await store.listSnapshots("test");
+    expect(list.length).toBe(2);
+    expect(list[0].version).toBe(2);
+    expect(list[1].version).toBe(1);
+    expect(list[1].label).toBe("initial");
+  });
+
+  it("rolls back to a snapshot", async () => {
+    const data = await store.createOntology("test", "Test");
+    await store.createSnapshot("test", "empty");
+
+    data.nodes.push({
+      id: "n_1", type: "Item", properties: { name: "hello" },
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    });
+    await store.saveOntology("test", data);
+
+    const before = await store.loadOntology("test");
+    expect(before.nodes.length).toBe(1);
+
+    await store.rollback("test", 1);
+    const after = await store.loadOntology("test");
+    expect(after.nodes.length).toBe(0);
+  });
+
+  it("auto-migrates from ontologies/ to graphs/", async () => {
+    // Use a separate tmpDir to avoid interference from beforeEach
+    const migDir = await fs.mkdtemp(path.join(os.tmpdir(), "backpack-mig-"));
+    try {
+      const oldDir = path.join(migDir, "ontologies", "legacy");
+      await fs.mkdir(oldDir, { recursive: true });
+      const oldData = {
+        metadata: { name: "legacy", description: "Old", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        nodes: [{ id: "n_1", type: "T", properties: {}, createdAt: "", updatedAt: "" }],
+        edges: [],
+      };
+      await fs.writeFile(path.join(oldDir, "ontology.json"), JSON.stringify(oldData));
+
+      const freshStore = new JsonFileBackend(migDir);
+      await freshStore.initialize();
+
+      // Old dir should be gone
+      await expect(fs.stat(path.join(migDir, "ontologies"))).rejects.toThrow();
+
+      // New structure should exist
+      const migrated = await freshStore.loadOntology("legacy");
+      expect(migrated.nodes.length).toBe(1);
+    } finally {
+      await fs.rm(migDir, { recursive: true });
+    }
+  });
+
   it("writes JSON that is human-readable (pretty-printed)", async () => {
     await store.createOntology("test", "Test");
-    const filePath = path.join(tmpDir, "ontologies", "test", "ontology.json");
+    const filePath = path.join(tmpDir, "graphs", "test", "branches", "main.json");
     const raw = await fs.readFile(filePath, "utf-8");
 
     // Pretty-printed JSON has newlines

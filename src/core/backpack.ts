@@ -249,4 +249,68 @@ export class Backpack {
     await this.persist(ontologyName);
     return { count: ids.length, ids };
   }
+
+  // --- Branch operations ---
+
+  async listBranches(name: string) {
+    if (!("listBranches" in this.storage)) return [];
+    return (this.storage as any).listBranches(name);
+  }
+
+  async createBranch(name: string, branchName: string, fromBranch?: string) {
+    if (!("createBranch" in this.storage)) throw new Error("Branches not supported by storage backend");
+    await (this.storage as any).createBranch(name, branchName, fromBranch);
+  }
+
+  async switchBranch(name: string, branchName: string) {
+    if (!("switchBranch" in this.storage)) throw new Error("Branches not supported by storage backend");
+    // Invalidate cached graph since we're switching branches
+    this.graphs.delete(name);
+    await (this.storage as any).switchBranch(name, branchName);
+  }
+
+  async deleteBranch(name: string, branchName: string) {
+    if (!("deleteBranch" in this.storage)) throw new Error("Branches not supported by storage backend");
+    await (this.storage as any).deleteBranch(name, branchName);
+  }
+
+  // --- Snapshot operations ---
+
+  async createSnapshot(name: string, label?: string): Promise<number> {
+    if (!("createSnapshot" in this.storage)) throw new Error("Snapshots not supported by storage backend");
+    return (this.storage as any).createSnapshot(name, label);
+  }
+
+  async listSnapshots(name: string) {
+    if (!("listSnapshots" in this.storage)) return [];
+    return (this.storage as any).listSnapshots(name);
+  }
+
+  async rollback(name: string, version: number) {
+    if (!("rollback" in this.storage)) throw new Error("Snapshots not supported by storage backend");
+    this.graphs.delete(name);
+    await (this.storage as any).rollback(name, version);
+  }
+
+  async diffWithSnapshot(name: string, version: number) {
+    if (!("loadSnapshot" in this.storage)) throw new Error("Snapshots not supported by storage backend");
+    const current = await this.storage.loadOntology(name);
+    const snapshot = await (this.storage as any).loadSnapshot(name, version);
+
+    const currentNodeIds = new Set(current.nodes.map((n) => n.id));
+    const snapshotNodeIds = new Set(snapshot.nodes.map((n: any) => n.id));
+    const currentEdgeIds = new Set(current.edges.map((e) => e.id));
+    const snapshotEdgeIds = new Set(snapshot.edges.map((e: any) => e.id));
+
+    return {
+      nodesAdded: current.nodes.filter((n) => !snapshotNodeIds.has(n.id)).map((n) => ({ id: n.id, type: n.type })),
+      nodesRemoved: snapshot.nodes.filter((n: any) => !currentNodeIds.has(n.id)).map((n: any) => ({ id: n.id, type: n.type })),
+      edgesAdded: current.edges.filter((e) => !snapshotEdgeIds.has(e.id)).map((e) => ({ id: e.id, type: e.type })),
+      edgesRemoved: snapshot.edges.filter((e: any) => !currentEdgeIds.has(e.id)).map((e: any) => ({ id: e.id, type: e.type })),
+      currentNodeCount: current.nodes.length,
+      snapshotNodeCount: snapshot.nodes.length,
+      currentEdgeCount: current.edges.length,
+      snapshotEdgeCount: snapshot.edges.length,
+    };
+  }
 }
