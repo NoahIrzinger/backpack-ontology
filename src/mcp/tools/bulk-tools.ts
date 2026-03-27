@@ -93,4 +93,58 @@ export function registerBulkTools(
       }
     }
   );
+
+  server.registerTool(
+    "backpack_connect",
+    {
+      title: "Connect Nodes",
+      description:
+        "Add multiple edges between existing nodes in a single call. Use this to bulk-add relationships — all source and target node IDs must already exist.",
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph"),
+        edges: z
+          .array(
+            z.object({
+              type: z.string().describe("Edge type (e.g. 'DEPENDS_ON', 'SERVES_ON')"),
+              sourceId: z.string().describe("ID of the source node"),
+              targetId: z.string().describe("ID of the target node"),
+              properties: z
+                .record(z.string(), z.unknown())
+                .optional()
+                .describe("Optional key-value pairs for this edge"),
+            })
+          )
+          .describe("Array of edges to create between existing nodes"),
+      },
+    },
+    async ({ ontology, edges }) => {
+      try {
+        const result = await backpack.connectEdges(
+          ontology,
+          edges as Array<{
+            type: string;
+            sourceId: string;
+            targetId: string;
+            properties?: Record<string, unknown>;
+          }>
+        );
+        trackEvent("tool_call", { tool: "backpack_connect" });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Created ${result.count} edge(s).\nIDs: ${JSON.stringify(result.ids)}`,
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
 }

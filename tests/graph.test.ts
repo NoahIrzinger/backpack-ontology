@@ -343,6 +343,63 @@ describe("Graph", () => {
     });
   });
 
+  describe("getStats", () => {
+    it("computes orphan count and connected stats", () => {
+      const a = graph.addNode("Person", { name: "Alice" });
+      const b = graph.addNode("Person", { name: "Bob" });
+      const c = graph.addNode("City", { name: "Berlin" });
+      const d = graph.addNode("City", { name: "Paris" }); // orphan
+      graph.addEdge("KNOWS", a.id, b.id);
+      graph.addEdge("LIVES_IN", a.id, c.id);
+
+      const stats = graph.getStats();
+
+      expect(stats.orphanCount).toBe(1);
+      expect(stats.orphans[0].label).toBe("Paris");
+      expect(stats.mostConnected[0].label).toBe("Alice");
+      expect(stats.mostConnected[0].connections).toBe(2);
+      expect(stats.avgConnections).toBeCloseTo(1); // 4 total connections / 4 nodes
+      expect(stats.density).toBeGreaterThan(0);
+      expect(stats.typeConnections.length).toBe(2); // Person<->Person, City<->Person
+    });
+
+    it("returns empty stats for empty graph", () => {
+      const stats = graph.getStats();
+      expect(stats.orphanCount).toBe(0);
+      expect(stats.mostConnected).toEqual([]);
+      expect(stats.density).toBe(0);
+      expect(stats.avgConnections).toBe(0);
+    });
+  });
+
+  describe("importEdges", () => {
+    it("bulk-creates edges between existing nodes", () => {
+      const a = graph.addNode("Person", { name: "Alice" });
+      const b = graph.addNode("Person", { name: "Bob" });
+      const c = graph.addNode("City", { name: "Berlin" });
+
+      const ids = graph.importEdges([
+        { type: "KNOWS", sourceId: a.id, targetId: b.id },
+        { type: "LIVES_IN", sourceId: a.id, targetId: c.id },
+      ]);
+
+      expect(ids.length).toBe(2);
+      expect(ids.every((id) => id.startsWith("e_"))).toBe(true);
+      expect(graph.data.edges.length).toBe(2);
+    });
+
+    it("throws on invalid source, zero edges created", () => {
+      const a = graph.addNode("Person", { name: "Alice" });
+
+      expect(() =>
+        graph.importEdges([
+          { type: "KNOWS", sourceId: "n_fake", targetId: a.id },
+        ])
+      ).toThrow("source node not found");
+      expect(graph.data.edges.length).toBe(0);
+    });
+  });
+
   describe("neighbors (graph traversal)", () => {
     it("finds immediate neighbors", () => {
       const a = graph.addNode("Person", { name: "A" });

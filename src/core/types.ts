@@ -99,6 +99,30 @@ export interface NeighborResult {
   neighbors: NeighborEntry[];
 }
 
+// --- Graph statistics ---
+
+export interface NodeDegree {
+  id: string;
+  label: string;
+  type: string;
+  connections: number;
+}
+
+export interface TypeConnection {
+  types: string;
+  count: number;
+}
+
+export interface GraphStats {
+  orphanCount: number;
+  orphans: NodeDegree[];
+  mostConnected: NodeDegree[];
+  leastConnected: NodeDegree[];
+  avgConnections: number;
+  density: number;
+  typeConnections: TypeConnection[];
+}
+
 // --- Pluggable storage interface ---
 
 /**

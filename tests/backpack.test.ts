@@ -192,17 +192,38 @@ describe("Backpack (end-to-end)", () => {
     expect(result.edgeIds).toEqual([]);
   });
 
-  it("describe ontology returns structure without instance data", async () => {
+  it("describe ontology includes stats", async () => {
     await backpack.createOntology("test", "Test");
-    await backpack.addNode("test", "Person", { name: "Alice" });
-    await backpack.addNode("test", "Person", { name: "Bob" });
+    const alice = await backpack.addNode("test", "Person", { name: "Alice" });
+    const bob = await backpack.addNode("test", "Person", { name: "Bob" });
     await backpack.addNode("test", "City", { name: "Berlin" });
+    await backpack.addEdge("test", "KNOWS", alice.id, bob.id);
 
     const desc = await backpack.describeOntology("test");
     expect(desc.nodeCount).toBe(3);
-    expect(desc.nodeTypes.length).toBe(2);
-    expect(desc.metadata.name).toBe("test");
-    // No node instances in the response
-    expect("nodes" in desc).toBe(false);
+    expect(desc.stats).toBeDefined();
+    expect(desc.stats.orphanCount).toBe(1); // Berlin has no edges
+    expect(desc.stats.mostConnected[0].connections).toBe(1);
+    expect(desc.stats.density).toBeGreaterThan(0);
+  });
+
+  it("bulk connect edges between existing nodes", async () => {
+    await backpack.createOntology("test", "Test");
+    const alice = await backpack.addNode("test", "Person", { name: "Alice" });
+    const bob = await backpack.addNode("test", "Person", { name: "Bob" });
+    const berlin = await backpack.addNode("test", "City", { name: "Berlin" });
+
+    const result = await backpack.connectEdges("test", [
+      { type: "KNOWS", sourceId: alice.id, targetId: bob.id },
+      { type: "LIVES_IN", sourceId: alice.id, targetId: berlin.id },
+      { type: "LIVES_IN", sourceId: bob.id, targetId: berlin.id },
+    ]);
+
+    expect(result.count).toBe(3);
+    expect(result.ids.length).toBe(3);
+
+    const desc = await backpack.describeOntology("test");
+    expect(desc.edgeCount).toBe(3);
+    expect(desc.stats.orphanCount).toBe(0);
   });
 });

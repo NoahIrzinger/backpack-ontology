@@ -11,6 +11,8 @@ import type {
   GetNodeResult,
   NeighborEntry,
   NeighborResult,
+  GraphStats,
+  NodeDegree,
 } from "./types.js";
 
 /**
@@ -227,6 +229,75 @@ export class Graph {
     return Array.from(counts.entries())
       .map(([type, count]) => ({ type, count }))
       .sort((a, b) => b.count - a.count);
+  }
+
+  /** Compute graph statistics for diagnostics and improvement planning. */
+  getStats(): GraphStats {
+    const connectionCounts = new Map<string, number>();
+    const connectedNodes = new Set<string>();
+    const typePairs = new Map<string, number>();
+
+    for (const edge of this.data.edges) {
+      connectionCounts.set(edge.sourceId, (connectionCounts.get(edge.sourceId) ?? 0) + 1);
+      connectionCounts.set(edge.targetId, (connectionCounts.get(edge.targetId) ?? 0) + 1);
+      connectedNodes.add(edge.sourceId);
+      connectedNodes.add(edge.targetId);
+
+      const sType = this.getNode(edge.sourceId)?.type ?? "?";
+      const tType = this.getNode(edge.targetId)?.type ?? "?";
+      const pairKey = [sType, tType].sort().join("<->");
+      typePairs.set(pairKey, (typePairs.get(pairKey) ?? 0) + 1);
+    }
+
+    const toDegree = (n: Node): NodeDegree => ({
+      id: n.id,
+      label: this.nodeLabel(n),
+      type: n.type,
+      connections: connectionCounts.get(n.id) ?? 0,
+    });
+
+    const orphans = this.data.nodes
+      .filter((n) => !connectedNodes.has(n.id))
+      .map(toDegree);
+
+    const sorted = this.data.nodes
+      .map(toDegree)
+      .sort((a, b) => b.connections - a.connections);
+
+    const totalPossible = this.data.nodes.length * (this.data.nodes.length - 1) / 2;
+    const density = totalPossible > 0 ? this.data.edges.length / totalPossible : 0;
+
+    const totalConnections = [...connectionCounts.values()].reduce((a, b) => a + b, 0);
+
+    return {
+      orphanCount: orphans.length,
+      orphans: orphans.slice(0, 20),
+      mostConnected: sorted.slice(0, 10),
+      leastConnected: sorted.filter((n) => n.connections > 0).reverse().slice(0, 10),
+      avgConnections: this.data.nodes.length > 0 ? totalConnections / this.data.nodes.length : 0,
+      density: Math.round(density * 1000) / 1000,
+      typeConnections: [...typePairs.entries()]
+        .map(([types, count]) => ({ types, count }))
+        .sort((a, b) => b.count - a.count),
+    };
+  }
+
+  /** Bulk-import edges only (all nodes must already exist). Single atomic operation. */
+  importEdges(
+    edges: Array<{ type: string; sourceId: string; targetId: string; properties?: Record<string, unknown> }>
+  ): string[] {
+    // Pre-validate all node references
+    for (let i = 0; i < edges.length; i++) {
+      const { sourceId, targetId } = edges[i];
+      if (!this.getNode(sourceId)) throw new Error(`Edge at index ${i}: source node not found: ${sourceId}`);
+      if (!this.getNode(targetId)) throw new Error(`Edge at index ${i}: target node not found: ${targetId}`);
+    }
+    const ids: string[] = [];
+    for (const { type, sourceId, targetId, properties } of edges) {
+      const edge = this.addEdge(type, sourceId, targetId, properties ?? {});
+      ids.push(edge.id);
+    }
+    return ids;
   }
 
   // --- Edge operations ---

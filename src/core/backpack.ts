@@ -12,6 +12,7 @@ import type {
   ListNodesResult,
   GetNodeResult,
   NeighborResult,
+  GraphStats,
 } from "./types.js";
 
 /**
@@ -102,6 +103,7 @@ export class Backpack {
     edgeTypes: EdgeTypeInfo[];
     nodeCount: number;
     edgeCount: number;
+    stats: GraphStats;
   }> {
     const graph = await this.getGraph(name);
     return {
@@ -110,6 +112,7 @@ export class Backpack {
       edgeTypes: graph.getEdgeTypes(),
       nodeCount: graph.data.nodes.length,
       edgeCount: graph.data.edges.length,
+      stats: graph.getStats(),
     };
   }
 
@@ -229,5 +232,15 @@ export class Backpack {
       edgeCount: result.edgeIds.length,
       edgeIds: result.edgeIds,
     };
+  }
+
+  async connectEdges(
+    ontologyName: string,
+    edges: Array<{ type: string; sourceId: string; targetId: string; properties?: Record<string, unknown> }>
+  ): Promise<{ count: number; ids: string[] }> {
+    const graph = await this.getGraph(ontologyName);
+    const ids = graph.importEdges(edges);
+    await this.persist(ontologyName);
+    return { count: ids.length, ids };
   }
 }
