@@ -5,3 +5,7 @@ dist/
 
 # Backpack data (XDG locations)
 .backpack/
+
+# Claude Code (proprietary — do not commit to public repo)
+CLAUDE.md
+.claude/
