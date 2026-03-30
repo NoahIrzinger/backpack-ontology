@@ -2,7 +2,7 @@
 
 ## 0.2.25 (2026-03-30)
 
-### Curiosity Engine
+### Intelligence Tools
 - **`backpack_expand`** — expand a node with related entities in a direction
 - **`backpack_explain_path`** — find shortest path between two nodes, returns context for semantic explanation
 - **`backpack_enrich`** — deepen a node with additional properties and connections
