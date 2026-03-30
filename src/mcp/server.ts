@@ -11,6 +11,7 @@ import { registerNodeTools } from "./tools/node-tools.js";
 import { registerEdgeTools } from "./tools/edge-tools.js";
 import { registerBulkTools } from "./tools/bulk-tools.js";
 import { registerVersionTools } from "./tools/version-tools.js";
+import { registerIntelligenceTools } from "./tools/intelligence-tools.js";
 
 /** Configuration for local file-based storage. */
 export interface BackpackLocalConfig {
@@ -101,6 +102,7 @@ Be selective — not every conversation needs to be captured. Focus on knowledge
   registerEdgeTools(server, backpack);
   registerBulkTools(server, backpack);
   registerVersionTools(server, backpack);
+  registerIntelligenceTools(server, backpack);
 
   return server;
 }

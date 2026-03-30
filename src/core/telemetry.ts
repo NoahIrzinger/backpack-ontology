@@ -135,6 +135,8 @@ async function buildSnapshot(event: string): Promise<TelemetryEvent> {
   let ontologyCount = 0;
   let totalNodes = 0;
   let totalEdges = 0;
+  let branchCount = 0;
+  let snapshotCount = 0;
   if (backpackRef) {
     try {
       const ontologies = await backpackRef.listOntologies();
@@ -142,6 +144,12 @@ async function buildSnapshot(event: string): Promise<TelemetryEvent> {
       for (const o of ontologies) {
         totalNodes += o.nodeCount;
         totalEdges += o.edgeCount;
+        try {
+          const branches = await backpackRef.listBranches(o.name);
+          branchCount += (branches as any[]).length;
+          const snapshots = await backpackRef.listSnapshots(o.name);
+          snapshotCount += (snapshots as any[]).length;
+        } catch { /* storage may not support branches */ }
       }
     } catch {
       // Can't gather stats — skip
@@ -160,6 +168,8 @@ async function buildSnapshot(event: string): Promise<TelemetryEvent> {
       ontologyCount,
       totalNodes,
       totalEdges,
+      branchCount,
+      snapshotCount,
       nodeVersion: process.version,
       os: os.platform(),
       arch: os.arch(),
