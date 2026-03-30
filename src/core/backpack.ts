@@ -292,6 +292,33 @@ export class Backpack {
     await (this.storage as any).rollback(name, version);
   }
 
+  // --- Snippet operations ---
+
+  async saveSnippet(name: string, snippet: {
+    label: string;
+    description?: string;
+    nodeIds: string[];
+    edgeIds: string[];
+  }): Promise<string> {
+    if (!("saveSnippet" in this.storage)) throw new Error("Snippets not supported by storage backend");
+    return (this.storage as any).saveSnippet(name, snippet);
+  }
+
+  async listSnippets(name: string) {
+    if (!("listSnippets" in this.storage)) return [];
+    return (this.storage as any).listSnippets(name);
+  }
+
+  async loadSnippet(name: string, snippetId: string) {
+    if (!("loadSnippet" in this.storage)) throw new Error("Snippets not supported by storage backend");
+    return (this.storage as any).loadSnippet(name, snippetId);
+  }
+
+  async deleteSnippet(name: string, snippetId: string) {
+    if (!("deleteSnippet" in this.storage)) throw new Error("Snippets not supported by storage backend");
+    await (this.storage as any).deleteSnippet(name, snippetId);
+  }
+
   async diffWithSnapshot(name: string, version: number) {
     if (!("loadSnapshot" in this.storage)) throw new Error("Snapshots not supported by storage backend");
     const current = await this.storage.loadOntology(name);

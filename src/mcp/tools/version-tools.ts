@@ -196,4 +196,107 @@ export function registerVersionTools(
       }
     }
   );
+
+  // --- Snippet tools ---
+
+  server.registerTool(
+    "backpack_save_snippet",
+    {
+      title: "Save Snippet",
+      description: "Save a named subgraph snippet — a subset of nodes and edges from a learning graph. If edgeIds is omitted, all edges between the given nodes are included automatically.",
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph"),
+        label: z.string().describe("Human-readable label for the snippet"),
+        description: z.string().optional().describe("Optional description of what this snippet captures"),
+        nodeIds: z.array(z.string()).describe("Node IDs to include in the snippet"),
+        edgeIds: z.array(z.string()).optional().describe("Edge IDs to include (auto-detected if omitted)"),
+      },
+    },
+    async ({ ontology, label, description, nodeIds, edgeIds }) => {
+      try {
+        const id = await backpack.saveSnippet(ontology, {
+          label,
+          description: description as string | undefined,
+          nodeIds,
+          edgeIds: edgeIds ?? [],
+        });
+        trackEvent("tool_call", { tool: "backpack_save_snippet" });
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ id, label }, null, 2) }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "backpack_list_snippets",
+    {
+      title: "List Snippets",
+      description: "List saved snippets for a learning graph.",
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph"),
+      },
+    },
+    async ({ ontology }) => {
+      try {
+        const snippets = await backpack.listSnippets(ontology);
+        trackEvent("tool_call", { tool: "backpack_list_snippets" });
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(snippets, null, 2) }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "backpack_load_snippet",
+    {
+      title: "Load Snippet",
+      description: "Load the full data for a saved snippet, including its nodes and edges.",
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph"),
+        snippetId: z.string().describe("ID of the snippet to load"),
+      },
+    },
+    async ({ ontology, snippetId }) => {
+      try {
+        const snippet = await backpack.loadSnippet(ontology, snippetId);
+        trackEvent("tool_call", { tool: "backpack_load_snippet" });
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(snippet, null, 2) }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "backpack_delete_snippet",
+    {
+      title: "Delete Snippet",
+      description: "Delete a saved snippet from a learning graph.",
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph"),
+        snippetId: z.string().describe("ID of the snippet to delete"),
+      },
+    },
+    async ({ ontology, snippetId }) => {
+      try {
+        await backpack.deleteSnippet(ontology, snippetId);
+        trackEvent("tool_call", { tool: "backpack_delete_snippet" });
+        return {
+          content: [{ type: "text" as const, text: `Snippet "${snippetId}" deleted.` }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+      }
+    }
+  );
 }

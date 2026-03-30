@@ -71,6 +71,14 @@ export class JsonFileBackend implements StorageBackend {
     return path.join(this.graphDir(name), "terms.json");
   }
 
+  private snippetsDir(name: string): string {
+    return path.join(this.graphDir(name), "snippets");
+  }
+
+  private snippetFile(name: string, snippetId: string): string {
+    return path.join(this.snippetsDir(name), `${snippetId}.json`);
+  }
+
   // --- Meta helpers ---
 
   async loadMeta(name: string): Promise<GraphMeta> {
@@ -549,5 +557,100 @@ export class JsonFileBackend implements StorageBackend {
       const filePath = path.join(this.snapshotsDir(name, branch), snap.filename);
       await fs.rm(filePath).catch(() => {});
     }
+  }
+
+  // --- Snippet methods ---
+
+  async saveSnippet(graphName: string, snippet: {
+    label: string;
+    description?: string;
+    nodeIds: string[];
+    edgeIds: string[];
+  }): Promise<string> {
+    const id = snippet.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").substring(0, 50) || "snippet";
+
+    const data = await this.loadOntology(graphName);
+    const meta = await this.loadMeta(graphName);
+
+    const nodeSet = new Set(snippet.nodeIds);
+
+    let resolvedEdgeIds = snippet.edgeIds;
+    if (!resolvedEdgeIds || resolvedEdgeIds.length === 0) {
+      resolvedEdgeIds = data.edges
+        .filter(e => nodeSet.has(e.sourceId) && nodeSet.has(e.targetId))
+        .map(e => e.id);
+    }
+    const edgeSet = new Set(resolvedEdgeIds);
+
+    const snippetData = {
+      id,
+      label: snippet.label,
+      description: snippet.description ?? "",
+      parentGraph: graphName,
+      parentBranch: meta.activeBranch,
+      nodeIds: snippet.nodeIds,
+      edgeIds: resolvedEdgeIds,
+      nodes: data.nodes.filter(n => nodeSet.has(n.id)),
+      edges: data.edges.filter(e => edgeSet.has(e.id)),
+      nodeCount: snippet.nodeIds.length,
+      edgeCount: resolvedEdgeIds.length,
+      createdAt: new Date().toISOString(),
+    };
+
+    const dir = this.snippetsDir(graphName);
+    await fs.mkdir(dir, { recursive: true });
+
+    const filePath = this.snippetFile(graphName, id);
+    const tmpPath = filePath + ".tmp";
+    await fs.writeFile(tmpPath, JSON.stringify(snippetData, null, 2), "utf-8");
+    await fs.rename(tmpPath, filePath);
+
+    return id;
+  }
+
+  async listSnippets(graphName: string): Promise<Array<{
+    id: string;
+    label: string;
+    description: string;
+    nodeCount: number;
+    edgeCount: number;
+    createdAt: string;
+  }>> {
+    const dir = this.snippetsDir(graphName);
+    let entries: string[];
+    try {
+      entries = await fs.readdir(dir);
+    } catch {
+      return [];
+    }
+
+    const snippets = [];
+    for (const entry of entries.sort()) {
+      if (!entry.endsWith(".json")) continue;
+      try {
+        const raw = await fs.readFile(path.join(dir, entry), "utf-8");
+        const data = JSON.parse(raw);
+        snippets.push({
+          id: data.id,
+          label: data.label,
+          description: data.description ?? "",
+          nodeCount: data.nodeCount ?? data.nodes?.length ?? 0,
+          edgeCount: data.edgeCount ?? data.edges?.length ?? 0,
+          createdAt: data.createdAt,
+        });
+      } catch {}
+    }
+    return snippets;
+  }
+
+  async loadSnippet(graphName: string, snippetId: string): Promise<any> {
+    const filePath = this.snippetFile(graphName, snippetId);
+    const raw = await fs.readFile(filePath, "utf-8");
+    return JSON.parse(raw);
+  }
+
+  async deleteSnippet(graphName: string, snippetId: string): Promise<void> {
+    const filePath = this.snippetFile(graphName, snippetId);
+    await fs.rm(filePath);
   }
 }
