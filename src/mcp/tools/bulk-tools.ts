@@ -147,4 +147,50 @@ export function registerBulkTools(
       }
     }
   );
+
+  server.registerTool(
+    "backpack_extract",
+    {
+      title: "Extract Subgraph",
+      description:
+        "Extract a subgraph (selected nodes + auto-detected edges) into a new learning graph. Node IDs are preserved.",
+      inputSchema: {
+        ontology: z.string().describe("Source learning graph"),
+        nodeIds: z
+          .array(z.string())
+          .describe("Node IDs to extract"),
+        newName: z.string().describe("Name for the new learning graph"),
+        description: z
+          .string()
+          .optional()
+          .describe("Description for the new graph"),
+      },
+    },
+    async ({ ontology, nodeIds, newName, description }) => {
+      try {
+        const result = await backpack.extractSubgraph(
+          ontology,
+          nodeIds as string[],
+          newName,
+          description
+        );
+        trackEvent("tool_call", { tool: "backpack_extract" });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Created learning graph "${newName}" with ${result.nodeCount} node(s) and ${result.edgeCount} edge(s).`,
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
 }

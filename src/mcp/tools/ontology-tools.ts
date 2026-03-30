@@ -169,4 +169,37 @@ export function registerOntologyTools(
       }
     }
   );
+
+  server.registerTool(
+    "backpack_rename",
+    {
+      title: "Rename Learning Graph",
+      description: "Rename a learning graph.",
+      inputSchema: {
+        ontology: z.string().describe("Current name of the learning graph"),
+        newName: z.string().describe("New name for the learning graph"),
+      },
+    },
+    async ({ ontology, newName }) => {
+      try {
+        await backpack.renameOntology(ontology, newName);
+        trackEvent("tool_call", { tool: "backpack_rename" });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Renamed to "${newName}".`,
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
 }

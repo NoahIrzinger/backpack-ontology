@@ -88,6 +88,34 @@ export class Backpack {
     this.graphs.delete(name);
   }
 
+  async extractSubgraph(
+    sourceName: string,
+    nodeIds: string[],
+    newName: string,
+    description?: string
+  ): Promise<{ nodeCount: number; edgeCount: number }> {
+    const graph = await this.getGraph(sourceName);
+    const idSet = new Set(nodeIds);
+    const nodes = graph.data.nodes.filter((n) => idSet.has(n.id));
+    const edges = graph.data.edges.filter(
+      (e) => idSet.has(e.sourceId) && idSet.has(e.targetId)
+    );
+    const now = new Date().toISOString();
+    const newData: LearningGraphData = {
+      metadata: {
+        name: newName,
+        description: description || `Extracted from ${sourceName}`,
+        createdAt: now,
+        updatedAt: now,
+      },
+      nodes: JSON.parse(JSON.stringify(nodes)),
+      edges: JSON.parse(JSON.stringify(edges)),
+    };
+    await this.storage.saveOntology(newName, newData);
+    this.graphs.set(newName, new Graph(newData));
+    return { nodeCount: nodes.length, edgeCount: edges.length };
+  }
+
   async renameOntology(oldName: string, newName: string): Promise<void> {
     await this.storage.renameOntology(oldName, newName);
     const graph = this.graphs.get(oldName);
