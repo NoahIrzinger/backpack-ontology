@@ -2,6 +2,8 @@
 
 **Carry your knowledge forward.** Backpack lets Claude remember what matters: your clients, your processes, your decisions. Knowledge that travels with you.
 
+![Backpack graph viewer demo](docs/assets/demo.gif)
+
 ## What it does
 
 When you're working with Claude and something worth remembering comes up, Backpack saves it as a structured learning graph. Next time you ask, Claude already knows.
