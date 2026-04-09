@@ -171,6 +171,37 @@ export function registerOntologyTools(
   );
 
   server.registerTool(
+    "backpack_stats",
+    {
+      title: "Graph Statistics",
+      description:
+        "Full connectivity analysis of a learning graph. Returns every node grouped by type with incoming, outgoing, and total edge counts plus property counts. Types are sorted by average connectivity (lowest first), nodes within each type sorted by total connections (lowest first). Use this to find under-connected nodes and plan graph improvements systematically.",
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph to analyze"),
+      },
+    },
+    async ({ ontology }) => {
+      try {
+        const table = await backpack.getDegreeTable(ontology);
+        trackEvent("tool_call", { tool: "backpack_stats" });
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(table, null, 2) },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
     "backpack_rename",
     {
       title: "Rename Learning Graph",

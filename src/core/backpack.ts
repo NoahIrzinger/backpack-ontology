@@ -14,6 +14,7 @@ import type {
   NeighborResult,
   GraphStats,
   GraphAudit,
+  GraphDegreeTable,
 } from "./types.js";
 
 /**
@@ -266,6 +267,11 @@ export class Backpack {
   async auditOntology(name: string): Promise<GraphAudit> {
     const graph = await this.getGraph(name);
     return graph.audit();
+  }
+
+  async getDegreeTable(name: string): Promise<GraphDegreeTable> {
+    const graph = await this.getGraph(name);
+    return graph.getDegreeTable();
   }
 
   async connectEdges(

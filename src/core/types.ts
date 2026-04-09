@@ -147,6 +147,34 @@ export interface GraphAudit {
   suggestions: string[];
 }
 
+// --- Node degree table ---
+
+export interface NodeDegreeDetail {
+  id: string;
+  label: string;
+  type: string;
+  incoming: number;
+  outgoing: number;
+  total: number;
+  propertyCount: number;
+}
+
+export interface TypeSummary {
+  type: string;
+  count: number;
+  avgConnections: number;
+  avgProperties: number;
+  nodes: NodeDegreeDetail[];
+}
+
+export interface GraphDegreeTable {
+  nodeCount: number;
+  edgeCount: number;
+  density: number;
+  avgConnections: number;
+  types: TypeSummary[];
+}
+
 // --- Pluggable storage interface ---
 
 /**

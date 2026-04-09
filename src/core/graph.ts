@@ -13,6 +13,9 @@ import type {
   NeighborResult,
   GraphStats,
   GraphAudit,
+  GraphDegreeTable,
+  NodeDegreeDetail,
+  TypeSummary,
   NodeDegree,
   SparseType,
 } from "./types.js";
@@ -281,6 +284,63 @@ export class Graph {
       typeConnections: [...typePairs.entries()]
         .map(([types, count]) => ({ types, count }))
         .sort((a, b) => b.count - a.count),
+    };
+  }
+
+  /** Full node degree table grouped by type, sorted by connectivity ascending. */
+  getDegreeTable(): GraphDegreeTable {
+    const incoming = new Map<string, number>();
+    const outgoing = new Map<string, number>();
+
+    for (const edge of this.data.edges) {
+      outgoing.set(edge.sourceId, (outgoing.get(edge.sourceId) ?? 0) + 1);
+      incoming.set(edge.targetId, (incoming.get(edge.targetId) ?? 0) + 1);
+    }
+
+    const byType = new Map<string, NodeDegreeDetail[]>();
+    for (const node of this.data.nodes) {
+      const inc = incoming.get(node.id) ?? 0;
+      const out = outgoing.get(node.id) ?? 0;
+      const detail: NodeDegreeDetail = {
+        id: node.id,
+        label: this.nodeLabel(node),
+        type: node.type,
+        incoming: inc,
+        outgoing: out,
+        total: inc + out,
+        propertyCount: Object.keys(node.properties).length,
+      };
+      const list = byType.get(node.type) ?? [];
+      list.push(detail);
+      byType.set(node.type, list);
+    }
+
+    const types: TypeSummary[] = [];
+    for (const [type, nodes] of byType) {
+      nodes.sort((a, b) => a.total - b.total);
+      const totalConns = nodes.reduce((s, n) => s + n.total, 0);
+      const totalProps = nodes.reduce((s, n) => s + n.propertyCount, 0);
+      types.push({
+        type,
+        count: nodes.length,
+        avgConnections: Math.round((totalConns / nodes.length) * 10) / 10,
+        avgProperties: Math.round((totalProps / nodes.length) * 10) / 10,
+        nodes,
+      });
+    }
+
+    types.sort((a, b) => a.avgConnections - b.avgConnections);
+
+    const totalPossible = this.data.nodes.length * (this.data.nodes.length - 1) / 2;
+    const totalConns = [...incoming.values()].reduce((a, b) => a + b, 0)
+      + [...outgoing.values()].reduce((a, b) => a + b, 0);
+
+    return {
+      nodeCount: this.data.nodes.length,
+      edgeCount: this.data.edges.length,
+      density: totalPossible > 0 ? Math.round((this.data.edges.length / totalPossible) * 1000) / 1000 : 0,
+      avgConnections: this.data.nodes.length > 0 ? Math.round((totalConns / this.data.nodes.length) * 10) / 10 : 0,
+      types,
     };
   }
 
