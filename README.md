@@ -1,12 +1,16 @@
 # Backpack
 
-**Carry your knowledge forward.** Backpack lets Claude remember what matters: your clients, your processes, your decisions. Knowledge that travels with you.
+**Carry your knowledge forward.**
+
+LLMs are incredible at reasoning but have zero memory of your world. Every new conversation starts from scratch — you repeat clients, projects, decisions, and preferences over and over.
+
+Backpack fixes that. It gives your AI a persistent, structured knowledge base that carries forward across every session.
 
 ![Backpack graph viewer demo](docs/assets/demo.gif)
 
 ## What it does
 
-When you're working with Claude and something worth remembering comes up, Backpack saves it as a structured learning graph. Next time you ask, Claude already knows.
+Tell your AI something once, and it remembers — next conversation, next week, next month.
 
 ```
 You: "We just signed Acme Corp, they're on the Enterprise tier, main contact is Sarah Chen"
@@ -21,6 +25,22 @@ Claude: "Acme Corp is on the Enterprise tier, main contact is Sarah Chen..."
 ```
 
 No copy-pasting. No re-explaining. Your knowledge carries forward.
+
+## The graph viewer
+
+An interactive canvas where you can actually see and explore your knowledge base.
+
+![Backpack explore demo](docs/assets/explore.gif)
+
+- Force-directed layout with live updates as you add knowledge
+- Click nodes to explore relationships, properties, and connections
+- Focus mode to zoom into a subgraph, walk mode to trace paths between ideas
+- Type hulls group related things visually
+- Vim-style keyboard navigation, undo/redo, search
+
+This is where human understanding meets AI-generated knowledge — turning structured data into something you can see, navigate, and build on.
+
+[Backpack Viewer repo](https://github.com/NoahIrzinger/backpack-viewer)
 
 ## Get started
 
