@@ -10,6 +10,7 @@
     "backpack-local": "./dist/bin/backpack.js",
     "backpack-sync": "./dist/bin/backpack-sync.js",
     "backpack-init": "./dist/bin/init.js",
+    "backpack-benchmark": "./dist/bin/backpack-benchmark.js",
     "backpack": "./dist/bin/backpack.js"
   },
   "main": "./dist/index.js",

@@ -198,6 +198,28 @@ Claude will open the graph visualizer so you can explore your knowledge visually
 
 You have one backpack. It goes everywhere with you. Inside it, you organize knowledge into **learning graphs**, each covering a different topic (clients, processes, compliance, etc.). Within each graph, information is stored as things connected by relationships. You don't need to think about the structure. Claude handles it automatically.
 
+## Token efficiency
+
+Backpack uses progressive disclosure — it never loads the full graph into context. Each tool returns only what's needed.
+
+Here's what a typical interaction looks like against a real 81-node graph (~12,000 tokens if loaded raw):
+
+| What the AI does | Tokens returned | % of full graph |
+|---|---|---|
+| Describe structure | ~2,478 | 20% |
+| Search for a topic (17 results) | ~429 | 3% |
+| Get one node's full details | ~154 | 1% |
+
+A describe → search → get_node interaction uses **~3,000 tokens** instead of ~12,000. For smaller graphs (13 nodes, ~1,700 tokens), the savings are smaller because the metadata is a larger fraction of total data.
+
+Results vary by graph size and operation. Node lookups and searches consistently use under 5% of the full graph. Describe uses 20–67% depending on graph size. Run the benchmark on your own graphs:
+
+```bash
+npx -p backpack-ontology@latest backpack-benchmark
+```
+
+Across sessions, the real value is that the graph exists at all. It's built once and queried forever — every future conversation uses structured lookups instead of re-explaining context from scratch.
+
 ## Data and privacy
 
 **Backpack Local**: your data is stored as readable JSON files on your computer at `~/.local/share/backpack/ontologies/`. You can inspect, edit, back up, or version-control these files directly.
