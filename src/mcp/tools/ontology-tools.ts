@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
+import { estimateTokens, formatSavingsFooter } from "../../core/token-estimate.js";
 
 export function registerOntologyTools(
   server: McpServer,
@@ -123,11 +124,14 @@ export function registerOntologyTools(
       try {
         const info = await backpack.describeOntology(ontology);
         trackEvent("tool_call", { tool: "backpack_describe" });
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(info, null, 2) },
-          ],
-        };
+        const responseText = JSON.stringify(info, null, 2);
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
       } catch (err) {
         return {
           content: [
@@ -154,11 +158,14 @@ export function registerOntologyTools(
       try {
         const audit = await backpack.auditOntology(ontology);
         trackEvent("tool_call", { tool: "backpack_audit" });
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(audit, null, 2) },
-          ],
-        };
+        const responseText = JSON.stringify(audit, null, 2);
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
       } catch (err) {
         return {
           content: [
@@ -185,11 +192,27 @@ export function registerOntologyTools(
       try {
         const table = await backpack.getDegreeTable(ontology);
         trackEvent("tool_call", { tool: "backpack_stats" });
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(table, null, 2) },
-          ],
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const avgTokensPerNode = table.nodeCount > 0 ? Math.round(graphTokens / table.nodeCount) : 0;
+        // Compute actual describe cost
+        const describeResult = await backpack.describeOntology(ontology);
+        const describeCost = estimateTokens(JSON.stringify(describeResult, null, 2));
+        // Estimate search cost: a typical search returns ~5 NodeSummary objects (~30 chars each)
+        const searchCost = Math.max(10, Math.round(avgTokensPerNode * 0.3) * Math.min(5, table.nodeCount));
+        const tokenEfficiency = {
+          fullGraphTokens: graphTokens,
+          avgTokensPerNode,
+          searchCost,
+          describeCost,
+          reductionVsFullLoad: graphTokens > describeCost ? `${Math.round((1 - describeCost / graphTokens) * 100)}%` : "N/A",
         };
+        const responseText = JSON.stringify({ ...table, tokenEfficiency }, null, 2);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
       } catch (err) {
         return {
           content: [

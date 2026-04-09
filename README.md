@@ -42,6 +42,112 @@ claude mcp add backpack-local -s user -- npx backpack-ontology@latest
 
 You can always move to Backpack App later by telling Claude "sync my backpack to the cloud".
 
+### Works with other AI tools
+
+Backpack works with any tool that supports MCP. Here's how to set it up:
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Add to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in your project):
+
+```json
+{
+  "mcpServers": {
+    "backpack": {
+      "command": "npx",
+      "args": ["backpack-ontology@latest"]
+    }
+  }
+}
+```
+
+Or configure through Cursor Settings > MCP.
+</details>
+
+<details>
+<summary><strong>Windsurf</strong></summary>
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "backpack": {
+      "command": "npx",
+      "args": ["backpack-ontology@latest"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>OpenAI Codex CLI</strong></summary>
+
+```bash
+codex mcp add backpack -- npx backpack-ontology@latest
+```
+
+Or add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.backpack]
+command = "npx"
+args = ["backpack-ontology@latest"]
+```
+</details>
+
+<details>
+<summary><strong>Cline (VS Code)</strong></summary>
+
+Click the MCP Servers icon in Cline's top bar, then add:
+
+```json
+{
+  "mcpServers": {
+    "backpack": {
+      "command": "npx",
+      "args": ["backpack-ontology@latest"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Continue.dev</strong></summary>
+
+Add to `~/.continue/config.yaml`:
+
+```yaml
+mcpServers:
+  - name: backpack
+    command: npx
+    args:
+      - "backpack-ontology@latest"
+```
+</details>
+
+<details>
+<summary><strong>Zed</strong></summary>
+
+Add to `~/.config/zed/settings.json`:
+
+```json
+{
+  "context_servers": {
+    "backpack": {
+      "command": "npx",
+      "args": ["backpack-ontology@latest"]
+    }
+  }
+}
+```
+
+Note: Zed uses `context_servers`, not `mcpServers`.
+</details>
+
 ### Switching from Backpack Local to Backpack App
 
 Already using Backpack Local and want to move to the cloud? One command uploads everything:

@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
+import { estimateTokens, formatSavingsFooter } from "../../core/token-estimate.js";
 import { formatTermsHint } from "./terms-hint.js";
 import { viewerUrl } from "./viewer-url.js";
 
@@ -24,11 +25,14 @@ export function registerNodeTools(
       try {
         const types = await backpack.getNodeTypes(ontology);
         trackEvent("tool_call", { tool: "backpack_node_types" });
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(types, null, 2) },
-          ],
-        };
+        const responseText = JSON.stringify(types, null, 2);
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
       } catch (err) {
         return {
           content: [
@@ -71,11 +75,14 @@ export function registerNodeTools(
       try {
         const result = await backpack.listNodes(ontology, type, limit, offset);
         trackEvent("tool_call", { tool: "backpack_list_nodes" });
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(result, null, 2) },
-          ],
-        };
+        const responseText = JSON.stringify(result, null, 2);
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
       } catch (err) {
         return {
           content: [
@@ -111,12 +118,15 @@ export function registerNodeTools(
           return { content: [{ type: "text" as const, text: `No nodes matching "${query}" found.` }] };
         }
         const ids = results.map((r: { id: string }) => r.id);
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(results, null, 2) },
-            { type: "text" as const, text: `View in graph: ${viewerUrl(ontology, ids)}` },
-          ],
-        };
+        const responseText = JSON.stringify(results, null, 2);
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+          { type: "text" as const, text: `View in graph: ${viewerUrl(ontology, ids)}` },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
       } catch (err) {
         return {
           content: [
@@ -144,12 +154,15 @@ export function registerNodeTools(
       try {
         const result = await backpack.getNode(ontology, nodeId);
         trackEvent("tool_call", { tool: "backpack_get_node" });
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(result, null, 2) },
-            { type: "text" as const, text: `View in graph: ${viewerUrl(ontology, [nodeId])}` },
-          ],
-        };
+        const responseText = JSON.stringify(result, null, 2);
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+          { type: "text" as const, text: `View in graph: ${viewerUrl(ontology, [nodeId])}` },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
       } catch (err) {
         return {
           content: [

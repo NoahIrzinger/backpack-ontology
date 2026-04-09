@@ -16,6 +16,7 @@ import type {
   GraphAudit,
   GraphDegreeTable,
 } from "./types.js";
+import { estimateGraphTokens } from "./token-estimate.js";
 
 /**
  * The main Backpack API. Composes a StorageBackend with the Graph engine.
@@ -31,6 +32,7 @@ import type {
 export class Backpack {
   private storage: StorageBackend;
   private graphs: Map<string, Graph> = new Map();
+  private tokenCache: Map<string, number> = new Map();
 
   constructor(storage: StorageBackend) {
     this.storage = storage;
@@ -55,6 +57,7 @@ export class Backpack {
   private async persist(ontologyName: string): Promise<void> {
     const graph = this.graphs.get(ontologyName);
     if (graph) {
+      this.tokenCache.delete(ontologyName);
       await this.storage.saveOntology(ontologyName, graph.data);
     }
   }
@@ -87,6 +90,7 @@ export class Backpack {
   async deleteOntology(name: string): Promise<void> {
     await this.storage.deleteOntology(name);
     this.graphs.delete(name);
+    this.tokenCache.delete(name);
   }
 
   async extractSubgraph(
@@ -123,6 +127,7 @@ export class Backpack {
     if (graph) {
       graph.data.metadata.name = newName;
       this.graphs.delete(oldName);
+      this.tokenCache.delete(oldName);
       this.graphs.set(newName, graph);
     }
   }
@@ -264,6 +269,15 @@ export class Backpack {
     };
   }
 
+  async getGraphTokens(name: string): Promise<number> {
+    const cached = this.tokenCache.get(name);
+    if (cached !== undefined) return cached;
+    const graph = await this.getGraph(name);
+    const tokens = estimateGraphTokens(graph.data);
+    this.tokenCache.set(name, tokens);
+    return tokens;
+  }
+
   async auditOntology(name: string): Promise<GraphAudit> {
     const graph = await this.getGraph(name);
     return graph.audit();
@@ -300,6 +314,7 @@ export class Backpack {
     if (!("switchBranch" in this.storage)) throw new Error("Branches not supported by storage backend");
     // Invalidate cached graph since we're switching branches
     this.graphs.delete(name);
+    this.tokenCache.delete(name);
     await (this.storage as any).switchBranch(name, branchName);
   }
 
@@ -323,6 +338,7 @@ export class Backpack {
   async rollback(name: string, version: number) {
     if (!("rollback" in this.storage)) throw new Error("Snapshots not supported by storage backend");
     this.graphs.delete(name);
+    this.tokenCache.delete(name);
     await (this.storage as any).rollback(name, version);
   }
 

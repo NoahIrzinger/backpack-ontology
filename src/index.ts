@@ -26,7 +26,10 @@ export type {
 export { JsonFileBackend } from "./storage/json-file-backend.js";
 
 // Telemetry
-export { initTelemetry, trackEvent, shutdown as shutdownTelemetry } from "./core/telemetry.js";
+export { initTelemetry, trackEvent, trackTokenSavings, shutdown as shutdownTelemetry } from "./core/telemetry.js";
+
+// Token estimation
+export { estimateTokens, estimateGraphTokens, computeSavings, formatSavingsFooter } from "./core/token-estimate.js";
 
 // MCP server factory
 export { createMcpServer } from "./mcp/server.js";

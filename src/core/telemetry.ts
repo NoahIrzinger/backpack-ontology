@@ -36,6 +36,7 @@ const sessionId = crypto.randomUUID();
 const sessionStartTime = Date.now();
 let machineId: string | null = null;
 let toolCalls: Record<string, number> = {};
+let tokenStats = { totalGraphTokens: 0, totalResponseTokens: 0, totalSaved: 0, readCount: 0 };
 let disabled: boolean | null = null;
 let backpackRef: Backpack | null = null;
 let initialized = false;
@@ -170,6 +171,7 @@ async function buildSnapshot(event: string): Promise<TelemetryEvent> {
       totalEdges,
       branchCount,
       snapshotCount,
+      tokenStats,
       nodeVersion: process.version,
       os: os.platform(),
       arch: os.arch(),
@@ -222,6 +224,19 @@ export function trackEvent(
       toolCalls[tool] = (toolCalls[tool] ?? 0) + 1;
     }
     // Individual events are no longer sent — aggregated at shutdown
+  } catch {
+    // Silently ignore
+  }
+}
+
+/** Track token savings from a read operation. Synchronous — never throws. */
+export function trackTokenSavings(graphTokens: number, responseTokens: number): void {
+  try {
+    if (disabled || !initialized) return;
+    tokenStats.totalGraphTokens += graphTokens;
+    tokenStats.totalResponseTokens += responseTokens;
+    tokenStats.totalSaved += Math.max(0, graphTokens - responseTokens);
+    tokenStats.readCount++;
   } catch {
     // Silently ignore
   }

@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
+import { estimateTokens, formatSavingsFooter } from "../../core/token-estimate.js";
 
 export function registerIntelligenceTools(
   server: McpServer,
@@ -28,13 +29,14 @@ export function registerIntelligenceTools(
         trackEvent("tool_call", { tool: "backpack_expand" });
 
         const directionHint = direction ? `\nExpansion direction: ${direction}` : "";
-
-        return {
-          content: [{
-            type: "text" as const,
-            text: `Node to expand:\n${JSON.stringify(nodeResult, null, 2)}\n\nNeighbors:\n${JSON.stringify(neighbors, null, 2)}${directionHint}\n\nNow use backpack_import_nodes to add related entities with edges connecting them to node ${nodeId}. Add 5-15 new nodes that deepen understanding in the requested direction. Always include edges.`,
-          }],
-        };
+        const responseText = `Node to expand:\n${JSON.stringify(nodeResult, null, 2)}\n\nNeighbors:\n${JSON.stringify(neighbors, null, 2)}${directionHint}\n\nNow use backpack_import_nodes to add related entities with edges connecting them to node ${nodeId}. Add 5-15 new nodes that deepen understanding in the requested direction. Always include edges.`;
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
       } catch (err) {
         return {
           content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }],
@@ -110,13 +112,14 @@ export function registerIntelligenceTools(
         }
 
         trackEvent("tool_call", { tool: "backpack_explain_path" });
-
-        return {
-          content: [{
-            type: "text" as const,
-            text: `Path found (${foundPath.length} nodes, ${foundPath.length - 1} hops):\n\n${JSON.stringify(pathDetails, null, 2)}\n\nExplain the semantic meaning of this path — why are these nodes connected through these relationships? What does the chain of connections reveal?`,
-          }],
-        };
+        const responseText = `Path found (${foundPath.length} nodes, ${foundPath.length - 1} hops):\n\n${JSON.stringify(pathDetails, null, 2)}\n\nExplain the semantic meaning of this path — why are these nodes connected through these relationships? What does the chain of connections reveal?`;
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
       } catch (err) {
         return {
           content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }],
@@ -145,12 +148,14 @@ export function registerIntelligenceTools(
         const describe = await backpack.describeOntology(ontology);
         trackEvent("tool_call", { tool: "backpack_enrich" });
 
-        return {
-          content: [{
-            type: "text" as const,
-            text: `Node to enrich:\n${JSON.stringify(nodeResult, null, 2)}\n\nNeighbors:\n${JSON.stringify(neighbors, null, 2)}\n\nGraph context:\n${JSON.stringify({ nodeTypes: describe.nodeTypes, edgeTypes: describe.edgeTypes }, null, 2)}\n\nEnrich this node: add missing properties (use backpack_update_node), add related entities (use backpack_import_nodes with edges to ${nodeId}), and add missing connections to existing nodes (use backpack_connect).`,
-          }],
-        };
+        const responseText = `Node to enrich:\n${JSON.stringify(nodeResult, null, 2)}\n\nNeighbors:\n${JSON.stringify(neighbors, null, 2)}\n\nGraph context:\n${JSON.stringify({ nodeTypes: describe.nodeTypes, edgeTypes: describe.edgeTypes }, null, 2)}\n\nEnrich this node: add missing properties (use backpack_update_node), add related entities (use backpack_import_nodes with edges to ${nodeId}), and add missing connections to existing nodes (use backpack_connect).`;
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
       } catch (err) {
         return {
           content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }],
