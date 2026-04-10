@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2 (2026-04-10)
+
+### Docs
+- **Fixed plugin install command in README.** The 0.3.1 README told Claude
+  Code users to run `/plugin install backpack-ontology-plugin@...` which
+  would fail because the plugin's name (from `plugin.json`) is
+  `backpack-ontology`, not `backpack-ontology-plugin`. Corrected to
+  `/plugin install backpack-ontology@NoahIrzinger-backpack-ontology-plugin`.
+
 ## 0.3.1 (2026-04-10)
 
 ### Docs

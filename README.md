@@ -62,7 +62,7 @@ Prefer to keep everything on your machine? No account needed.
 
 ```
 /plugin marketplace add NoahIrzinger/backpack-ontology-plugin
-/plugin install backpack-ontology-plugin@NoahIrzinger-backpack-ontology-plugin
+/plugin install backpack-ontology@NoahIrzinger-backpack-ontology-plugin
 ```
 
 Restart Claude Code (or run `/reload-plugins`) and you're ready. Plugin repo: [backpack-ontology-plugin](https://github.com/NoahIrzinger/backpack-ontology-plugin).
