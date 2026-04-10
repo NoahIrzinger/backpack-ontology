@@ -25,6 +25,13 @@ export type {
 // Storage backends
 export { JsonFileBackend } from "./storage/json-file-backend.js";
 
+// Remote graph registry (subscriptions to graphs hosted at HTTPS URLs)
+export { RemoteRegistry, RemoteRegistryError } from "./core/remote-registry.js";
+export type { RemoteEntry } from "./core/remote-registry.js";
+export { remoteFetch, RemoteFetchError, isBlockedIp } from "./core/remote-fetch.js";
+export type { RemoteFetchOptions, RemoteFetchResult } from "./core/remote-fetch.js";
+export { validateRemoteGraph, RemoteSchemaError, REMOTE_GRAPH_LIMITS } from "./core/remote-schema.js";
+
 // Telemetry
 export { initTelemetry, trackEvent, trackTokenSavings, shutdown as shutdownTelemetry } from "./core/telemetry.js";
 

@@ -2,6 +2,7 @@ import * as crypto from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Backpack } from "../core/backpack.js";
 import type { StorageBackend } from "../core/types.js";
+import { RemoteRegistry } from "../core/remote-registry.js";
 import { JsonFileBackend } from "../storage/json-file-backend.js";
 import { BackpackAppBackend } from "../storage/backpack-app-backend.js";
 import { OAuthClient } from "../auth/oauth.js";
@@ -12,6 +13,7 @@ import { registerEdgeTools } from "./tools/edge-tools.js";
 import { registerBulkTools } from "./tools/bulk-tools.js";
 import { registerVersionTools } from "./tools/version-tools.js";
 import { registerIntelligenceTools } from "./tools/intelligence-tools.js";
+import { registerRemoteTools } from "./tools/remote-tools.js";
 
 /** Configuration for local file-based storage. */
 export interface BackpackLocalConfig {
@@ -96,6 +98,15 @@ Be selective — not every conversation needs to be captured. Focus on knowledge
     }
   );
 
+  // The remote graph registry lives parallel to the local storage. It only
+  // matters when running against the local file backend (cloud users get
+  // their remotes via the cloud backend's own subscription model in the
+  // future). For now we always create one — it's cheap.
+  const remoteRegistry = new RemoteRegistry(
+    config && config.mode === "local" ? config.dataDir : undefined,
+  );
+  await remoteRegistry.initialize();
+
   // Register all tool groups
   registerOntologyTools(server, backpack);
   registerNodeTools(server, backpack);
@@ -103,6 +114,7 @@ Be selective — not every conversation needs to be captured. Focus on knowledge
   registerBulkTools(server, backpack);
   registerVersionTools(server, backpack);
   registerIntelligenceTools(server, backpack);
+  registerRemoteTools(server, backpack, remoteRegistry);
 
   return server;
 }
