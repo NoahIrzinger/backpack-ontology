@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Phase 2 carry-overs
+- **Author attribution on events.** `EventSourcedBackend` constructor
+  accepts an optional `author` (defaults to the `BACKPACK_AUTHOR`
+  environment variable). Every event the backend generates carries the
+  author identifier, used by the upcoming collaboration features.
+  `setAuthor()` lets long-running processes change the active author.
+  5 new tests.
+- **Method name cleanup.** Renamed the internal helper from
+  `loadSnapshot(name, branch)` to `loadBranchSnapshot(name, branch)` to
+  free up the `loadSnapshot(name, version)` name for the legacy
+  interface. Removed the awkward `loadSnapshot_legacy` and
+  `loadSnapshotByVersion` aliases. The `loadSnapshot(name, version)`
+  method now matches the signature consumers expect — fixes a runtime
+  bug where `Backpack.diffWithSnapshot` would have failed against the
+  new backend.
+
 ### Event-Sourced Storage (Phase 2 of the architectural reset)
 - **Storage layer rebuilt around an append-only event log per branch.**
   Each graph branch now consists of `events.jsonl` (the source of truth)

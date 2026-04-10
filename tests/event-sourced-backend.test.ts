@@ -397,6 +397,108 @@ describe("EventSourcedBackend — snapshot recovery", () => {
   });
 });
 
+describe("EventSourcedBackend — author attribution", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "esb-test-"));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+    delete process.env.BACKPACK_AUTHOR;
+  });
+
+  it("records the configured author on saveOntology-driven events", async () => {
+    const backend = new EventSourcedBackend(tmpDir, { author: "alice@example" });
+    await backend.initialize();
+    await backend.createOntology("test", "");
+
+    const data = await backend.loadOntology("test");
+    data.nodes.push(makeNode("n1", "Concept", { label: "Hello" }));
+    await backend.saveOntology("test", data);
+
+    const eventsRaw = await fs.readFile(
+      path.join(tmpDir, "graphs", "test", "branches", "main", "events.jsonl"),
+      "utf8",
+    );
+    const events = parseEventLog(eventsRaw);
+    expect(events).toHaveLength(1);
+    expect(events[0].author).toBe("alice@example");
+  });
+
+  it("records author on snapshot.label events", async () => {
+    const backend = new EventSourcedBackend(tmpDir, { author: "alice@example" });
+    await backend.initialize();
+    await backend.createOntology("test", "");
+    await backend.createSnapshot("test", "v1");
+
+    const eventsRaw = await fs.readFile(
+      path.join(tmpDir, "graphs", "test", "branches", "main", "events.jsonl"),
+      "utf8",
+    );
+    const events = parseEventLog(eventsRaw);
+    expect(events[0].author).toBe("alice@example");
+  });
+
+  it("falls back to BACKPACK_AUTHOR env var when no constructor option", async () => {
+    process.env.BACKPACK_AUTHOR = "env-user@example";
+    const backend = new EventSourcedBackend(tmpDir);
+    await backend.initialize();
+    await backend.createOntology("test", "");
+    const data = await backend.loadOntology("test");
+    data.nodes.push(makeNode("n1"));
+    await backend.saveOntology("test", data);
+
+    const eventsRaw = await fs.readFile(
+      path.join(tmpDir, "graphs", "test", "branches", "main", "events.jsonl"),
+      "utf8",
+    );
+    const events = parseEventLog(eventsRaw);
+    expect(events[0].author).toBe("env-user@example");
+  });
+
+  it("setAuthor changes the author for subsequent events", async () => {
+    const backend = new EventSourcedBackend(tmpDir, { author: "alice@example" });
+    await backend.initialize();
+    await backend.createOntology("test", "");
+
+    let data = await backend.loadOntology("test");
+    data.nodes.push(makeNode("n1"));
+    await backend.saveOntology("test", data);
+
+    backend.setAuthor("bob@example");
+    data = await backend.loadOntology("test");
+    data.nodes.push(makeNode("n2"));
+    await backend.saveOntology("test", data);
+
+    const eventsRaw = await fs.readFile(
+      path.join(tmpDir, "graphs", "test", "branches", "main", "events.jsonl"),
+      "utf8",
+    );
+    const events = parseEventLog(eventsRaw);
+    expect(events).toHaveLength(2);
+    expect(events[0].author).toBe("alice@example");
+    expect(events[1].author).toBe("bob@example");
+  });
+
+  it("omits author field when not configured", async () => {
+    const backend = new EventSourcedBackend(tmpDir);
+    await backend.initialize();
+    await backend.createOntology("test", "");
+    const data = await backend.loadOntology("test");
+    data.nodes.push(makeNode("n1"));
+    await backend.saveOntology("test", data);
+
+    const eventsRaw = await fs.readFile(
+      path.join(tmpDir, "graphs", "test", "branches", "main", "events.jsonl"),
+      "utf8",
+    );
+    const events = parseEventLog(eventsRaw);
+    expect(events[0].author).toBeUndefined();
+  });
+});
+
 describe("EventSourcedBackend — snippets (orthogonal)", () => {
   let tmpDir: string;
   let backend: EventSourcedBackend;

@@ -72,11 +72,36 @@ function emptyGraphData(name: string, description: string): LearningGraphData {
   };
 }
 
+export interface EventSourcedBackendOptions {
+  /**
+   * Identifier recorded as the author of every event this backend
+   * generates. Defaults to the BACKPACK_AUTHOR environment variable.
+   * Used by collaboration features to attribute changes.
+   */
+  author?: string;
+}
+
 export class EventSourcedBackend implements StorageBackend {
   private baseDir: string;
+  private author: string | undefined;
 
-  constructor(baseDir?: string) {
+  constructor(baseDir?: string, options?: EventSourcedBackendOptions) {
     this.baseDir = baseDir ?? dataDir();
+    this.author =
+      options?.author ?? process.env.BACKPACK_AUTHOR ?? undefined;
+  }
+
+  /**
+   * Set the author identifier used for newly-emitted events. Pass
+   * undefined to clear it. Useful in tests and in long-running
+   * processes where the active user changes.
+   */
+  setAuthor(author: string | undefined): void {
+    this.author = author;
+  }
+
+  getAuthor(): string | undefined {
+    return this.author;
   }
 
   // --- Path helpers ---
@@ -157,18 +182,24 @@ export class EventSourcedBackend implements StorageBackend {
 
   // --- Snapshot helpers ---
 
-  private async loadSnapshot(name: string, branch: string): Promise<LearningGraphData> {
+  /**
+   * Load the materialized state for a branch. Reads snapshot.json
+   * directly. If the cache is missing, rebuilds it from the event log.
+   */
+  private async loadBranchSnapshot(
+    name: string,
+    branch: string,
+  ): Promise<LearningGraphData> {
     try {
       const raw = await fs.readFile(this.snapshotFile(name, branch), "utf8");
       return JSON.parse(raw) as LearningGraphData;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-      // Snapshot missing — rebuild from events
       return this.rebuildSnapshot(name, branch);
     }
   }
 
-  private async writeSnapshot(
+  private async writeSnapshotFile(
     name: string,
     branch: string,
     data: LearningGraphData,
@@ -192,7 +223,7 @@ export class EventSourcedBackend implements StorageBackend {
       updatedAt: meta.updatedAt,
     };
     const state = replay(events, initial);
-    await this.writeSnapshot(name, branch, state);
+    await this.writeSnapshotFile(name, branch, state);
     return state;
   }
 
@@ -244,7 +275,6 @@ export class EventSourcedBackend implements StorageBackend {
       return this.eventCount(name, branch);
     }
 
-    // Optimistic concurrency check
     if (expectedVersion !== undefined) {
       const current = await this.eventCount(name, branch);
       if (current !== expectedVersion) {
@@ -254,18 +284,15 @@ export class EventSourcedBackend implements StorageBackend {
       }
     }
 
-    // Apply events to current state in memory
-    const currentState = await this.loadSnapshot(name, branch);
+    const currentState = await this.loadBranchSnapshot(name, branch);
     const newState = applyEvents(currentState, events);
 
-    // Append to event log
     const lines = events.map(serializeEvent).join("\n") + "\n";
     await fs.appendFile(this.eventsFile(name, branch), lines, "utf8");
 
-    // Update snapshot cache
-    await this.writeSnapshot(name, branch, newState);
+    await this.writeSnapshotFile(name, branch, newState);
 
-    return (await this.eventCount(name, branch));
+    return await this.eventCount(name, branch);
   }
 
   /**
@@ -277,9 +304,9 @@ export class EventSourcedBackend implements StorageBackend {
     branch: string,
     events: GraphEvent[],
   ): Promise<void> {
-    const lines = events.map(serializeEvent).join("\n") + (events.length > 0 ? "\n" : "");
+    const lines =
+      events.map(serializeEvent).join("\n") + (events.length > 0 ? "\n" : "");
     await this.writeAtomic(this.eventsFile(name, branch), lines);
-    // Rebuild snapshot from scratch
     const meta = await this.loadMetadata(name);
     const initial: LearningGraphMetadata = {
       name: meta.name,
@@ -288,7 +315,7 @@ export class EventSourcedBackend implements StorageBackend {
       updatedAt: meta.updatedAt,
     };
     const state = replay(events, initial);
-    await this.writeSnapshot(name, branch, state);
+    await this.writeSnapshotFile(name, branch, state);
   }
 
   // --- StorageBackend interface ---
@@ -309,7 +336,7 @@ export class EventSourcedBackend implements StorageBackend {
     for (const entry of entries) {
       try {
         const meta = await this.loadMetadata(entry);
-        const state = await this.loadSnapshot(entry, meta.defaultBranch);
+        const state = await this.loadBranchSnapshot(entry, meta.defaultBranch);
 
         const typeCounts = new Map<string, number>();
         for (const node of state.nodes) {
@@ -333,18 +360,20 @@ export class EventSourcedBackend implements StorageBackend {
 
   async loadOntology(name: string): Promise<LearningGraphData> {
     const meta = await this.loadMetadata(name);
-    return this.loadSnapshot(name, meta.defaultBranch);
+    return this.loadBranchSnapshot(name, meta.defaultBranch);
   }
 
   async saveOntology(name: string, data: LearningGraphData): Promise<void> {
     const meta = await this.loadMetadata(name);
-    const before = await this.loadSnapshot(name, meta.defaultBranch);
-    const events = diffToEvents(before, data);
+    const before = await this.loadBranchSnapshot(name, meta.defaultBranch);
+    const events = diffToEvents(before, data, this.author);
     if (events.length === 0) return;
     await this.appendEvents(name, meta.defaultBranch, events);
 
-    // Update graph-level metadata if name/description changed
-    if (data.metadata.name !== meta.name || data.metadata.description !== meta.description) {
+    if (
+      data.metadata.name !== meta.name ||
+      data.metadata.description !== meta.description
+    ) {
       meta.name = data.metadata.name;
       meta.description = data.metadata.description;
       meta.updatedAt = new Date().toISOString();
@@ -352,15 +381,16 @@ export class EventSourcedBackend implements StorageBackend {
     }
   }
 
-  async createOntology(name: string, description: string): Promise<LearningGraphData> {
+  async createOntology(
+    name: string,
+    description: string,
+  ): Promise<LearningGraphData> {
     if (await this.ontologyExists(name)) {
       throw new Error(`Learning graph "${name}" already exists`);
     }
 
-    // Create directory structure
     await fs.mkdir(this.branchDir(name, DEFAULT_BRANCH), { recursive: true });
 
-    // Write metadata.json
     const now = new Date().toISOString();
     const meta: GraphMetadataFile = {
       name,
@@ -372,10 +402,9 @@ export class EventSourcedBackend implements StorageBackend {
     };
     await this.writeMetadata(name, meta);
 
-    // Write empty events log + snapshot
     const initial = emptyGraphData(name, description);
     await this.writeAtomic(this.eventsFile(name, DEFAULT_BRANCH), "");
-    await this.writeSnapshot(name, DEFAULT_BRANCH, initial);
+    await this.writeSnapshotFile(name, DEFAULT_BRANCH, initial);
 
     return initial;
   }
@@ -392,7 +421,6 @@ export class EventSourcedBackend implements StorageBackend {
       throw new Error(`Learning graph "${newName}" already exists`);
     }
     await fs.rename(this.graphDir(oldName), this.graphDir(newName));
-    // Update metadata.json with the new name
     const meta = await this.loadMetadata(newName);
     meta.name = newName;
     meta.updatedAt = new Date().toISOString();
@@ -423,10 +451,15 @@ export class EventSourcedBackend implements StorageBackend {
     } catch {
       return [];
     }
-    const branches: { name: string; nodeCount: number; edgeCount: number; active: boolean }[] = [];
+    const branches: {
+      name: string;
+      nodeCount: number;
+      edgeCount: number;
+      active: boolean;
+    }[] = [];
     for (const entry of entries) {
       try {
-        const state = await this.loadSnapshot(name, entry);
+        const state = await this.loadBranchSnapshot(name, entry);
         branches.push({
           name: entry,
           nodeCount: state.nodes.length,
@@ -438,7 +471,11 @@ export class EventSourcedBackend implements StorageBackend {
     return branches;
   }
 
-  async createBranch(name: string, branchName: string, fromBranch?: string): Promise<void> {
+  async createBranch(
+    name: string,
+    branchName: string,
+    fromBranch?: string,
+  ): Promise<void> {
     const meta = await this.loadMetadata(name);
     const source = fromBranch ?? meta.defaultBranch;
     const targetDir = this.branchDir(name, branchName);
@@ -449,7 +486,6 @@ export class EventSourcedBackend implements StorageBackend {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
     }
     await fs.mkdir(targetDir, { recursive: true });
-    // Copy events log
     const sourceEvents = this.eventsFile(name, source);
     const targetEvents = this.eventsFile(name, branchName);
     try {
@@ -458,14 +494,12 @@ export class EventSourcedBackend implements StorageBackend {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
       await this.writeAtomic(targetEvents, "");
     }
-    // Copy snapshot
     const sourceSnap = this.snapshotFile(name, source);
     const targetSnap = this.snapshotFile(name, branchName);
     try {
       await fs.copyFile(sourceSnap, targetSnap);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-      // Recompute from events if snapshot didn't exist
       await this.rebuildSnapshot(name, branchName);
     }
   }
@@ -495,17 +529,16 @@ export class EventSourcedBackend implements StorageBackend {
   }
 
   async loadBranch(name: string, branchName: string): Promise<LearningGraphData> {
-    return this.loadSnapshot(name, branchName);
+    return this.loadBranchSnapshot(name, branchName);
   }
 
   // --- Snapshots (labeled events) ---
 
   async createSnapshot(name: string, label?: string): Promise<number> {
     const meta = await this.loadMetadata(name);
-    const event = makeSnapshotLabelEvent(label);
+    const event = makeSnapshotLabelEvent(label, this.author);
     await this.appendEvents(name, meta.defaultBranch, [event]);
-    // The "version" of the snapshot is the position in the event log (1-indexed)
-    return (await this.eventCount(name, meta.defaultBranch));
+    return await this.eventCount(name, meta.defaultBranch);
   }
 
   async listSnapshots(name: string): Promise<{
@@ -524,7 +557,6 @@ export class EventSourcedBackend implements StorageBackend {
       edgeCount: number;
       label?: string;
     }[] = [];
-    // Walk the event log, materialize state up to each snapshot.label event
     let runningState = emptyGraphData(meta.name, meta.description);
     for (let i = 0; i < events.length; i++) {
       runningState = applyEvents(runningState, [events[i]]);
@@ -539,13 +571,16 @@ export class EventSourcedBackend implements StorageBackend {
         });
       }
     }
-    // Most recent first, matching the legacy backend's behavior
     snapshots.reverse();
     return snapshots;
   }
 
-  async loadSnapshot_legacy(name: string, version: number): Promise<LearningGraphData> {
-    // "version" is the 1-indexed position in the event log
+  /**
+   * Load the materialized state at a specific snapshot version. The
+   * version is the position in the event log of a snapshot.label event,
+   * matching the value returned by createSnapshot and listSnapshots.
+   */
+  async loadSnapshot(name: string, version: number): Promise<LearningGraphData> {
     const meta = await this.loadMetadata(name);
     const events = await this.loadEvents(name, meta.defaultBranch);
     if (version < 1 || version > events.length) {
@@ -560,15 +595,6 @@ export class EventSourcedBackend implements StorageBackend {
     return replay(events.slice(0, version), initial);
   }
 
-  // Method name kept for backward compat with the existing
-  // public API exposed via Backpack.diffWithSnapshot etc.
-  async loadSnapshotByVersion(
-    name: string,
-    version: number,
-  ): Promise<LearningGraphData> {
-    return this.loadSnapshot_legacy(name, version);
-  }
-
   async rollback(name: string, version: number): Promise<void> {
     const meta = await this.loadMetadata(name);
     const events = await this.loadEvents(name, meta.defaultBranch);
@@ -580,8 +606,6 @@ export class EventSourcedBackend implements StorageBackend {
   }
 
   async getSnapshotLimit(_name: string): Promise<number> {
-    // Event-sourced backend doesn't prune snapshots — they're just labels
-    // in an append-only log. Return a large number to indicate "no limit."
     return Number.MAX_SAFE_INTEGER;
   }
 
@@ -673,7 +697,10 @@ export class EventSourcedBackend implements StorageBackend {
   }
 
   async loadSnippet(graphName: string, snippetId: string): Promise<any> {
-    const raw = await fs.readFile(this.snippetFile(graphName, snippetId), "utf8");
+    const raw = await fs.readFile(
+      this.snippetFile(graphName, snippetId),
+      "utf8",
+    );
     return JSON.parse(raw);
   }
 
