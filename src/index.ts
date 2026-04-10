@@ -31,6 +31,20 @@ export {
 } from "./storage/event-sourced-backend.js";
 export type { LockInfo } from "./storage/event-sourced-backend.js";
 
+// Backpacks registry (multi-backpack management)
+export {
+  loadRegistry,
+  listBackpacks,
+  getBackpack,
+  registerBackpack,
+  unregisterBackpack,
+  getActiveBackpack,
+  setActiveBackpack,
+  colorForName,
+  BackpackRegistryError,
+} from "./core/backpacks-registry.js";
+export type { BackpackEntry } from "./core/backpacks-registry.js";
+
 // Remote graph registry (subscriptions to graphs hosted at HTTPS URLs)
 export { RemoteRegistry, RemoteRegistryError } from "./core/remote-registry.js";
 export type { RemoteEntry } from "./core/remote-registry.js";

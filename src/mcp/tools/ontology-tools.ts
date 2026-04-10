@@ -19,15 +19,22 @@ export function registerOntologyTools(
     },
     async () => {
       const ontologies = await backpack.listOntologies();
+      const activeBackpack = backpack.getActiveBackpackEntry();
       trackEvent("tool_call", { tool: "backpack_list" });
+      const payload = {
+        activeBackpack: activeBackpack
+          ? { name: activeBackpack.name, path: activeBackpack.path }
+          : null,
+        graphs: ontologies,
+      };
       return {
         content: [
           {
             type: "text" as const,
             text:
               ontologies.length === 0
-                ? "The backpack is empty. Use backpack_create to add a learning graph."
-                : JSON.stringify(ontologies, null, 2),
+                ? `Active backpack: ${activeBackpack?.name ?? "unknown"}.\nThe backpack is empty. Use backpack_create to add a learning graph.`
+                : JSON.stringify(payload, null, 2),
           },
         ],
       };
@@ -120,8 +127,15 @@ export function registerOntologyTools(
       try {
         const info = await backpack.describeOntology(ontology);
         const graphTokens = await backpack.getGraphTokens(ontology);
+        const activeBackpack = backpack.getActiveBackpackEntry();
         trackEvent("tool_call", { tool: "backpack_describe" });
-        const enriched = { ...info, totalTokens: graphTokens };
+        const enriched = {
+          activeBackpack: activeBackpack
+            ? { name: activeBackpack.name, path: activeBackpack.path }
+            : null,
+          ...info,
+          totalTokens: graphTokens,
+        };
         const responseText = JSON.stringify(enriched, null, 2);
         const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
         const content: { type: "text"; text: string }[] = [

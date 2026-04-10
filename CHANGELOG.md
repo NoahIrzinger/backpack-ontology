@@ -1,5 +1,79 @@
 # Changelog
 
+## 0.4.0 (2026-04-10)
+
+This release adds **multiple backpacks** — a meta-layer on top of
+learning graphs that lets a user register several graph directories
+(personal, a shared OneDrive folder, a project-specific folder, etc)
+and switch between them. Only one backpack is active at a time; all
+reads and writes go to the active one.
+
+### Multiple backpacks
+- **Register a directory as a named backpack**, keep per-user config
+  (machine ID, telemetry, remote cache) separate from graphs. The
+  common use case: share a graphs folder with a colleague via OneDrive
+  without sharing anything else.
+- **First-run seeding.** The registry automatically seeds a
+  `personal` backpack on first load, pointing at the user's existing
+  graphs directory. Users upgrading from 0.3.x see no change — their
+  graphs are wrapped in the new `personal` entry and life continues.
+- **Auto-generated colors.** Each backpack gets a deterministic color
+  derived from its name (no UI burden for color picking). The viewer
+  uses the color for the active indicator.
+- **Env var override.** `BACKPACK_ACTIVE=<name>` overrides the
+  persisted active backpack for a single session — useful for running
+  two Claude Code windows against different backpacks from different
+  shells.
+
+### New MCP tools
+- `backpack_register <name> <path>` — register a pointer to a graphs
+  directory (creates the directory if it doesn't exist). Optional
+  `activate: true` switches immediately.
+- `backpack_switch <name>` — make a registered backpack active. Tears
+  down the in-memory cache and rebuilds the storage backend at the new
+  path, running auto-migration on legacy-format graphs found there.
+- `backpack_active` — returns the currently active backpack.
+- `backpack_registered` — lists every registered backpack, marking the
+  active one.
+- `backpack_unregister <name>` — removes a pointer. Refuses to unregister
+  the last remaining backpack. If the removed backpack was active, falls
+  back to the first remaining.
+
+### Surface in responses
+- `backpack_list` and `backpack_describe` responses now include an
+  `activeBackpack` field at the top of the payload (name + path) so
+  the agent sees the current context on every call. The skill guide
+  teaches the agent to name the backpack when reporting actions
+  ("Added X to the **work** backpack's Y graph").
+
+### New public API
+- `loadRegistry`, `listBackpacks`, `getBackpack`, `registerBackpack`,
+  `unregisterBackpack`, `getActiveBackpack`, `setActiveBackpack`,
+  `colorForName`, `BackpackRegistryError`, type `BackpackEntry`.
+- `Backpack.fromActiveBackpack()` — factory that constructs a Backpack
+  instance from the current active registry entry, the recommended
+  entry point for new local-mode integrations.
+- `Backpack.switchBackpack(name)` — instance method that swaps the
+  underlying storage backend and clears caches.
+- `Backpack.getActiveBackpackEntry()` — introspection.
+- `EventSourcedBackendOptions.graphsDirOverride` — constructor option
+  for pointing the backend at an arbitrary graphs directory (used by
+  the registry to wire each backpack to its own path).
+
+### Backend wiring
+- Local-mode MCP server now uses `Backpack.fromActiveBackpack()` on
+  startup instead of constructing a default backend, so the active
+  registry state drives the session from the first call.
+- Cloud-mode (`backpack-app` via SSE) is unchanged — the registry is
+  a local-only concept for now.
+
+### Tests
+- **25 new registry tests:** color determinism, seeding, registration
+  validation, duplicate rejection, active persistence, env var
+  override, unregistration (including last-remaining guard and
+  auto-switch), Backpack class switching, cross-backpack isolation.
+- Total: **337 tests passing**.
+
 ## 0.3.2 (2026-04-10)
 
 ### Docs

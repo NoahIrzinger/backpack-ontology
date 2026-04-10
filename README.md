@@ -275,12 +275,27 @@ Across sessions, the real value is that the graph exists at all. It's built once
 | `npx backpack-viewer` | Open the graph visualizer (http://localhost:5173) |
 | `npx -p backpack-ontology@latest backpack-init` | Remove any leftover Backpack hooks from `.claude/settings.json` |
 
+### Multiple backpacks
+
+A **backpack** is a named directory of learning graphs. Most users start with one (`personal`, auto-created at `~/.local/share/backpack/graphs/`) and never touch the registry. But you can register additional backpacks — a shared OneDrive folder with a colleague, a project-specific directory, a family-shared set of notes — and **switch between them** with a single command. Only one backpack is active at a time; all reads and writes go to the active one.
+
+Say to Claude:
+
+> "Register a backpack called 'work' at /Users/me/OneDrive/work-backpack and switch to it."
+
+> "Which backpack am I in?"
+
+> "Switch to the personal backpack."
+
+The viewer shows the active backpack in the sidebar header with a colored indicator — click it to switch. Config (machine ID, telemetry, remote cache) stays per-user; only the graphs directory is shared.
+
 ### Tools
 
 Claude uses these automatically. You don't need to call them directly.
 
 | What Claude does | How |
 |---|---|
+| Manage backpacks | `backpack_register`, `backpack_switch`, `backpack_active`, `backpack_registered`, `backpack_unregister` |
 | See what's in the backpack | `backpack_list`, `backpack_describe` |
 | Add a new learning graph | `backpack_create` |
 | Find something | `backpack_search`, `backpack_list_nodes` |

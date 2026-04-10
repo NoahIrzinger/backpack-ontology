@@ -106,14 +106,24 @@ export interface EventSourcedBackendOptions {
    * Used by collaboration features to attribute changes.
    */
   author?: string;
+  /**
+   * If provided, overrides the default `<baseDir>/graphs` path with
+   * an explicit directory that holds learning graphs. Used by the
+   * multi-backpack registry to point the backend at a named backpack's
+   * location (e.g. a OneDrive-synced folder) without moving per-user
+   * config, machine ID, telemetry, or remote cache.
+   */
+  graphsDirOverride?: string;
 }
 
 export class EventSourcedBackend implements StorageBackend {
   private baseDir: string;
+  private graphsDirOverride: string | undefined;
   private author: string | undefined;
 
   constructor(baseDir?: string, options?: EventSourcedBackendOptions) {
     this.baseDir = baseDir ?? dataDir();
+    this.graphsDirOverride = options?.graphsDirOverride;
     this.author =
       options?.author ?? process.env.BACKPACK_AUTHOR ?? undefined;
   }
@@ -134,7 +144,7 @@ export class EventSourcedBackend implements StorageBackend {
   // --- Path helpers ---
 
   private graphsDir(): string {
-    return path.join(this.baseDir, "graphs");
+    return this.graphsDirOverride ?? path.join(this.baseDir, "graphs");
   }
 
   private graphDir(name: string): string {

@@ -1,7 +1,6 @@
 import * as crypto from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Backpack } from "../core/backpack.js";
-import type { StorageBackend } from "../core/types.js";
 import { RemoteRegistry } from "../core/remote-registry.js";
 import { JsonFileBackend } from "../storage/json-file-backend.js";
 import { BackpackAppBackend } from "../storage/backpack-app-backend.js";
@@ -14,6 +13,7 @@ import { registerBulkTools } from "./tools/bulk-tools.js";
 import { registerVersionTools } from "./tools/version-tools.js";
 import { registerIntelligenceTools } from "./tools/intelligence-tools.js";
 import { registerRemoteTools } from "./tools/remote-tools.js";
+import { registerBackpackTools } from "./tools/backpack-tools.js";
 
 /** Configuration for local file-based storage. */
 export interface BackpackLocalConfig {
@@ -49,12 +49,21 @@ export type BackpackServerConfig = BackpackLocalConfig | BackpackAppConfig;
 export async function createMcpServer(
   config?: BackpackServerConfig
 ): Promise<McpServer> {
-  let backend: StorageBackend;
+  let backpack: Backpack;
 
   if (!config || config.mode === "local") {
-    backend = new JsonFileBackend(config?.dataDir);
+    // Local mode: resolve the active backpack from the registry. First
+    // run seeds a default "personal" entry pointing at the user's
+    // existing graphs directory, so upgrades from 0.3.x are transparent.
+    // A custom `config.dataDir` is honored only when explicitly passed —
+    // mostly used by tests. Normal users go through the registry.
+    if (config?.dataDir) {
+      backpack = new Backpack(new JsonFileBackend(config.dataDir));
+    } else {
+      backpack = await Backpack.fromActiveBackpack();
+    }
   } else if ("token" in config) {
-    backend = new BackpackAppBackend(config.url, config.token);
+    backpack = new Backpack(new BackpackAppBackend(config.url, config.token));
   } else {
     // OAuth2 SSO — opens browser on first run, caches tokens
     const cacheKey = crypto
@@ -63,10 +72,11 @@ export async function createMcpServer(
       .digest("hex")
       .slice(0, 12);
     const oauth = new OAuthClient(config.clientId, config.issuerUrl, cacheKey);
-    backend = new BackpackAppBackend(config.url, () => oauth.getAccessToken());
+    backpack = new Backpack(
+      new BackpackAppBackend(config.url, () => oauth.getAccessToken()),
+    );
   }
 
-  const backpack = new Backpack(backend);
   await backpack.initialize();
 
   // Initialize telemetry (non-blocking, fails silently)
@@ -115,6 +125,11 @@ Be selective — not every conversation needs to be captured. Focus on knowledge
   registerVersionTools(server, backpack);
   registerIntelligenceTools(server, backpack);
   registerRemoteTools(server, backpack, remoteRegistry);
+  // Local mode gets backpack (meta) management tools — cloud mode
+  // doesn't need them since the cloud backend is a single target.
+  if (!config || config.mode === "local") {
+    registerBackpackTools(server, backpack);
+  }
 
   return server;
 }

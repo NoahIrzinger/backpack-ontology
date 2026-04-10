@@ -29,6 +29,13 @@ import {
   planSummary,
   type NormalizationPlan,
 } from "./normalize.js";
+import {
+  getActiveBackpack,
+  setActiveBackpack,
+  listBackpacks,
+  type BackpackEntry,
+} from "./backpacks-registry.js";
+import { EventSourcedBackend } from "../storage/event-sourced-backend.js";
 
 /**
  * The main Backpack API. Composes a StorageBackend with the Graph engine.
@@ -46,13 +53,69 @@ export class Backpack {
   private graphs: Map<string, Graph> = new Map();
   private versions: Map<string, number> = new Map();
   private tokenCache: Map<string, number> = new Map();
+  private activeBackpack: BackpackEntry | null = null;
 
   constructor(storage: StorageBackend) {
     this.storage = storage;
   }
 
+  /**
+   * Construct a Backpack whose storage backend reads from the currently
+   * active registered backpack (see backpacks-registry). The default
+   * entry point for the MCP server and CLI — handles first-run seeding,
+   * env var overrides, and transparent switching via `switchBackpack`.
+   */
+  static async fromActiveBackpack(): Promise<Backpack> {
+    const entry = await getActiveBackpack();
+    const backend = new EventSourcedBackend(undefined, {
+      graphsDirOverride: entry.path,
+    });
+    const bp = new Backpack(backend);
+    bp.activeBackpack = entry;
+    return bp;
+  }
+
   async initialize(): Promise<void> {
     await this.storage.initialize();
+  }
+
+  // --- Backpack (meta) management ---
+
+  /**
+   * Name of the currently active backpack, or null if this instance
+   * was constructed directly with a backend (tests, custom integrations).
+   */
+  getActiveBackpackEntry(): BackpackEntry | null {
+    return this.activeBackpack;
+  }
+
+  async listRegisteredBackpacks(): Promise<BackpackEntry[]> {
+    return listBackpacks();
+  }
+
+  /**
+   * Switch the active backpack for this instance. Updates the persistent
+   * active.json state, tears down all in-memory caches, and replaces the
+   * storage backend with a fresh one pointed at the new path. The new
+   * backend's initialize() runs automatically (including legacy format
+   * auto-migration at the new location).
+   *
+   * Throws if the name is not registered.
+   */
+  async switchBackpack(name: string): Promise<BackpackEntry> {
+    const entry = await setActiveBackpack(name);
+    // Drop every cached thing rooted in the old backend
+    this.graphs.clear();
+    this.versions.clear();
+    this.tokenCache.clear();
+    // Stand up a fresh backend at the new path
+    const newBackend = new EventSourcedBackend(undefined, {
+      graphsDirOverride: entry.path,
+    });
+    await newBackend.initialize();
+    this.storage = newBackend;
+    this.activeBackpack = entry;
+    return entry;
   }
 
   /** Get or load a Graph for an ontology. Caches in memory. */
