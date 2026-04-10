@@ -272,7 +272,7 @@ Across sessions, the real value is that the graph exists at all. It's built once
 | `npx backpack-ontology@latest` | Start the Backpack Local MCP server |
 | `claude mcp add backpack-app ... --transport sse` | Connect to Backpack App cloud MCP |
 | `npx -p backpack-ontology@latest backpack-sync` | Upload local learning graphs to Backpack App |
-| `npx backpack-viewer` | Open the graph visualizer (http://localhost:5173) |
+| `npx backpack-viewer@latest` | Open the graph visualizer (http://localhost:5173). Always include `@latest` — `npx backpack-viewer` without the version suffix reuses a cached older version. |
 | `npx -p backpack-ontology@latest backpack-init` | Remove any leftover Backpack hooks from `.claude/settings.json` |
 
 ### Multiple backpacks

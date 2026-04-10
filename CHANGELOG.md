@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.1 (2026-04-10)
+
+### Docs
+- **Fixed `npx backpack-viewer` cache trap in the CLI reference.** The
+  README instructed users to run `npx backpack-viewer` without the
+  `@latest` suffix. Without it, npx silently reuses a cached older
+  install of the viewer from `_npx/<hash>/` and users don't see new
+  viewer releases until the cache expires. The corrected command is
+  `npx backpack-viewer@latest`, which forces npx to re-resolve from
+  the npm registry on every invocation. The plugin skill has the
+  same fix in `backpack-ontology-plugin@0.4.1`, which is what Claude
+  actually reads when asked to open the viewer.
+- Users stuck on an old viewer version can unblock themselves
+  immediately with `npm cache clean --force && npx backpack-viewer@latest`.
+
 ## 0.5.0 (2026-04-10)
 
 **Breaking change to the backpacks registry config format.** Zero-touch
