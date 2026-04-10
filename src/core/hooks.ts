@@ -1,15 +1,16 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
+
+interface HookEntry {
+  type?: string;
+  prompt?: string;
+  command?: string;
+  [key: string]: unknown;
+}
 
 interface HookRule {
   matcher?: string;
-  hooks?: Array<{
-    type?: string;
-    prompt?: string;
-    command?: string;
-    [key: string]: unknown;
-  }>;
+  hooks?: HookEntry[];
 }
 
 interface SettingsFile {
@@ -17,88 +18,80 @@ interface SettingsFile {
   [key: string]: unknown;
 }
 
-/** Check if a hook rule array already contains a backpack-originated rule. */
-function hasBackpackRule(rules: HookRule[]): boolean {
-  return rules.some(
-    (r) =>
-      r.hooks?.some(
-        (h) =>
-          (h.prompt && h.prompt.includes("Backpack")) ||
-          (h.command && h.command.includes("backpack"))
-      ) ?? false
-  );
+function isBackpackHook(h: HookEntry): boolean {
+  const prompt = (h.prompt ?? "").toLowerCase();
+  const command = (h.command ?? "").toLowerCase();
+  return prompt.includes("backpack") || command.includes("backpack");
+}
+
+function ruleHasBackpackHook(rule: HookRule): boolean {
+  return rule.hooks?.some(isBackpackHook) ?? false;
 }
 
 /**
- * Auto-install Backpack hooks into .claude/settings.json if not already present.
- * Runs silently on MCP server startup — users opt out by removing the hooks.
+ * Remove any Backpack-originated hook entries from .claude/settings.json.
+ *
+ * Older versions of backpack-ontology auto-installed Stop and PostToolUse
+ * hooks. The Stop hook ran a long-running agent on every conversation Stop
+ * event, causing multi-minute pauses for users. Even after the install code
+ * was removed, orphaned entries linger in existing settings files.
+ *
+ * This cleanup runs silently on MCP startup. It only touches hook rules whose
+ * command or prompt mentions "backpack" — unrelated user-installed hooks are
+ * left alone.
  */
-export async function ensureHooksInstalled(): Promise<void> {
-  const projectDir = process.cwd();
-  const claudeDir = path.join(projectDir, ".claude");
-  const settingsPath = path.join(claudeDir, "settings.json");
+export async function removeBackpackHooks(): Promise<void> {
+  const settingsPath = path.join(process.cwd(), ".claude", "settings.json");
 
-  // Locate hooks.json shipped with the package
-  const thisFile = fileURLToPath(import.meta.url);
-  const packageRoot = path.resolve(path.dirname(thisFile), "..", "..");
-  const hooksJsonPath = path.join(packageRoot, "hooks", "hooks.json");
-
-  let hooksConfig: SettingsFile;
+  let raw: string;
   try {
-    const raw = await fs.readFile(hooksJsonPath, "utf-8");
-    hooksConfig = JSON.parse(raw) as SettingsFile;
+    raw = await fs.readFile(settingsPath, "utf-8");
   } catch {
-    return; // Can't read hooks config — skip silently
+    return; // No settings file — nothing to clean up
   }
 
-  await fs.mkdir(claudeDir, { recursive: true });
-
-  let settings: SettingsFile = {};
+  let settings: SettingsFile;
   try {
-    const raw = await fs.readFile(settingsPath, "utf-8");
     settings = JSON.parse(raw) as SettingsFile;
   } catch {
-    // File doesn't exist or isn't valid JSON — start fresh
+    return; // Malformed JSON — leave it alone
   }
 
-  if (!settings.hooks) {
-    settings.hooks = {};
-  }
+  const hooks = settings.hooks as Record<string, unknown> | undefined;
+  if (!hooks) return;
 
-  const existingHooks = settings.hooks as Record<string, unknown>;
-  const newHooks = (hooksConfig.hooks ?? {}) as Record<string, unknown>;
+  let removed = 0;
+  for (const event of Object.keys(hooks)) {
+    const rules = hooks[event];
+    if (!Array.isArray(rules)) continue;
 
-  let changed = false;
-  for (const [event, rules] of Object.entries(newHooks)) {
-    if (!existingHooks[event]) {
-      existingHooks[event] = rules;
-      changed = true;
+    const filtered = (rules as HookRule[]).filter((rule) => !ruleHasBackpackHook(rule));
+    const dropped = rules.length - filtered.length;
+    if (dropped === 0) continue;
+
+    removed += dropped;
+    if (filtered.length === 0) {
+      delete hooks[event];
     } else {
-      const existing = existingHooks[event];
-      if (
-        Array.isArray(existing) &&
-        hasBackpackRule(existing as HookRule[])
-      ) {
-        continue; // Already installed
-      }
-      if (Array.isArray(existing) && Array.isArray(rules)) {
-        existingHooks[event] = [...existing, ...rules];
-        changed = true;
-      }
+      hooks[event] = filtered;
     }
   }
 
-  if (!changed) return;
+  if (removed === 0) return;
 
-  settings.hooks = existingHooks;
-  await fs.writeFile(
-    settingsPath,
-    JSON.stringify(settings, null, 2) + "\n",
-    "utf-8"
-  );
+  if (Object.keys(hooks).length === 0) {
+    delete settings.hooks;
+  } else {
+    settings.hooks = hooks;
+  }
+
+  // Atomic write: write to .tmp then rename, so a concurrent reader/editor
+  // can't see a half-written file.
+  const tmpPath = settingsPath + ".tmp";
+  await fs.writeFile(tmpPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
+  await fs.rename(tmpPath, settingsPath);
 
   console.error(
-    "Backpack hooks enabled (update notifications). " +
-      "To disable, remove backpack hooks from .claude/settings.json"
+    `Backpack: removed ${removed} orphaned hook${removed === 1 ? "" : "s"} from .claude/settings.json`
   );
 }

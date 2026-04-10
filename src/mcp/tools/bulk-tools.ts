@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
 import { formatTermsHint } from "./terms-hint.js";
+import { formatWriteError } from "./error-helpers.js";
 
 export function registerBulkTools(
   server: McpServer,
@@ -147,12 +148,7 @@ export function registerBulkTools(
         }
         return { content };
       } catch (err) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: ${(err as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatWriteError(backpack, ontology, err);
       }
     }
   );
@@ -201,12 +197,7 @@ export function registerBulkTools(
           ],
         };
       } catch (err) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: ${(err as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatWriteError(backpack, ontology, err);
       }
     }
   );
@@ -247,12 +238,7 @@ export function registerBulkTools(
           ],
         };
       } catch (err) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: ${(err as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatWriteError(backpack, ontology, err);
       }
     }
   );

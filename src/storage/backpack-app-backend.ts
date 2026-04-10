@@ -60,7 +60,13 @@ export class BackpackAppBackend implements StorageBackend {
     return (await res.json()) as LearningGraphData;
   }
 
-  async saveOntology(name: string, data: LearningGraphData): Promise<void> {
+  async saveOntology(
+    name: string,
+    data: LearningGraphData,
+    _expectedVersion?: number,
+  ): Promise<void> {
+    // BackpackApp HTTP backend does not support optimistic concurrency yet;
+    // expectedVersion is accepted for interface conformance and ignored.
     await this.request(`/api/ontologies/${encodeURIComponent(name)}`, {
       method: "PUT",
       body: JSON.stringify(data),

@@ -1,6 +1,6 @@
 {
   "name": "backpack-ontology",
-  "version": "0.2.25",
+  "version": "0.3.0",
   "description": "A persistent learning graph engine for Claude Code via MCP — structured knowledge that carries forward across sessions",
   "license": "Apache-2.0",
   "author": "Noah Irzinger",
@@ -16,8 +16,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist",
-    "hooks"
+    "dist"
   ],
   "scripts": {
     "build": "tsc",

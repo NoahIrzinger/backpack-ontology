@@ -24,9 +24,11 @@ export const EVENT_SCHEMA_VERSION = 1;
 export type EventOp =
   | "node.add"
   | "node.update"
+  | "node.retype"
   | "node.remove"
   | "edge.add"
   | "edge.remove"
+  | "edge.retype"
   | "metadata.update"
   | "snapshot.label";
 
@@ -53,6 +55,13 @@ export interface NodeUpdateEvent extends BaseEvent {
   properties: Record<string, unknown>;
 }
 
+export interface NodeRetypeEvent extends BaseEvent {
+  op: "node.retype";
+  id: string;
+  /** New type for the node. The ID and properties are unchanged. */
+  type: string;
+}
+
 export interface NodeRemoveEvent extends BaseEvent {
   op: "node.remove";
   id: string;
@@ -66,6 +75,13 @@ export interface EdgeAddEvent extends BaseEvent {
 export interface EdgeRemoveEvent extends BaseEvent {
   op: "edge.remove";
   id: string;
+}
+
+export interface EdgeRetypeEvent extends BaseEvent {
+  op: "edge.retype";
+  id: string;
+  /** New type for the edge. The ID, endpoints, and properties are unchanged. */
+  type: string;
 }
 
 export interface MetadataUpdateEvent extends BaseEvent {
@@ -82,9 +98,11 @@ export interface SnapshotLabelEvent extends BaseEvent {
 export type GraphEvent =
   | NodeAddEvent
   | NodeUpdateEvent
+  | NodeRetypeEvent
   | NodeRemoveEvent
   | EdgeAddEvent
   | EdgeRemoveEvent
+  | EdgeRetypeEvent
   | MetadataUpdateEvent
   | SnapshotLabelEvent;
 
@@ -126,6 +144,21 @@ export function makeNodeUpdateEvent(
   };
 }
 
+export function makeNodeRetypeEvent(
+  id: string,
+  type: string,
+  author?: string,
+): NodeRetypeEvent {
+  return {
+    v: EVENT_SCHEMA_VERSION,
+    ts: nowISO(),
+    author,
+    op: "node.retype",
+    id,
+    type,
+  };
+}
+
 export function makeNodeRemoveEvent(id: string, author?: string): NodeRemoveEvent {
   return { v: EVENT_SCHEMA_VERSION, ts: nowISO(), author, op: "node.remove", id };
 }
@@ -136,6 +169,21 @@ export function makeEdgeAddEvent(edge: Edge, author?: string): EdgeAddEvent {
 
 export function makeEdgeRemoveEvent(id: string, author?: string): EdgeRemoveEvent {
   return { v: EVENT_SCHEMA_VERSION, ts: nowISO(), author, op: "edge.remove", id };
+}
+
+export function makeEdgeRetypeEvent(
+  id: string,
+  type: string,
+  author?: string,
+): EdgeRetypeEvent {
+  return {
+    v: EVENT_SCHEMA_VERSION,
+    ts: nowISO(),
+    author,
+    op: "edge.retype",
+    id,
+    type,
+  };
 }
 
 export function makeMetadataUpdateEvent(
@@ -256,6 +304,22 @@ function doReplay(
         });
         break;
       }
+      case "node.retype": {
+        const existing = nodes.get(event.id);
+        if (!existing) {
+          throw new EventReplayError(
+            `node ${event.id} does not exist`,
+            i,
+            event,
+          );
+        }
+        nodes.set(event.id, {
+          ...existing,
+          type: event.type,
+          updatedAt: event.ts,
+        });
+        break;
+      }
       case "node.remove": {
         if (!nodes.has(event.id)) {
           throw new EventReplayError(
@@ -308,6 +372,22 @@ function doReplay(
           );
         }
         edges.delete(event.id);
+        break;
+      }
+      case "edge.retype": {
+        const existing = edges.get(event.id);
+        if (!existing) {
+          throw new EventReplayError(
+            `edge ${event.id} does not exist`,
+            i,
+            event,
+          );
+        }
+        edges.set(event.id, {
+          ...existing,
+          type: event.type,
+          updatedAt: event.ts,
+        });
         break;
       }
       case "metadata.update": {
@@ -406,40 +486,40 @@ export function diffToEvents(
     const prev = beforeNodes.get(id);
     if (!prev) {
       events.push(makeNodeAddEvent(node, author));
-    } else if (
-      JSON.stringify(prev.properties) !== JSON.stringify(node.properties) ||
-      prev.type !== node.type
-    ) {
-      // Type changes are encoded as a remove+add to preserve invariants;
-      // property-only changes use update
-      if (prev.type !== node.type) {
-        events.push(makeNodeRemoveEvent(id, author));
-        events.push(makeNodeAddEvent(node, author));
-      } else {
-        // Compute property delta: keys in `after` not equal in `before` are
-        // updated, keys in `before` not in `after` are deleted (set to null)
-        const patch: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(node.properties)) {
-          if (!Object.prototype.hasOwnProperty.call(prev.properties, k)) {
-            patch[k] = v;
-          } else if (JSON.stringify(prev.properties[k]) !== JSON.stringify(v)) {
-            patch[k] = v;
-          }
+      continue;
+    }
+    // Type change: emit retype (preserves ID + edges)
+    if (prev.type !== node.type) {
+      events.push(makeNodeRetypeEvent(id, node.type, author));
+    }
+    // Property change: emit update with the property delta
+    if (JSON.stringify(prev.properties) !== JSON.stringify(node.properties)) {
+      const patch: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(node.properties)) {
+        if (!Object.prototype.hasOwnProperty.call(prev.properties, k)) {
+          patch[k] = v;
+        } else if (JSON.stringify(prev.properties[k]) !== JSON.stringify(v)) {
+          patch[k] = v;
         }
-        for (const k of Object.keys(prev.properties)) {
-          if (!Object.prototype.hasOwnProperty.call(node.properties, k)) {
-            patch[k] = null;
-          }
-        }
-        events.push(makeNodeUpdateEvent(id, patch, author));
       }
+      for (const k of Object.keys(prev.properties)) {
+        if (!Object.prototype.hasOwnProperty.call(node.properties, k)) {
+          patch[k] = null;
+        }
+      }
+      events.push(makeNodeUpdateEvent(id, patch, author));
     }
   }
 
-  // Added edges
+  // Added edges + edge type changes
   for (const [id, edge] of afterEdges) {
-    if (!beforeEdges.has(id)) {
+    const prev = beforeEdges.get(id);
+    if (!prev) {
       events.push(makeEdgeAddEvent(edge, author));
+      continue;
+    }
+    if (prev.type !== edge.type) {
+      events.push(makeEdgeRetypeEvent(id, edge.type, author));
     }
   }
 

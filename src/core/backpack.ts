@@ -24,6 +24,11 @@ import {
   type ProposedNode,
   type ProposedEdge,
 } from "./draft.js";
+import {
+  planNormalization,
+  planSummary,
+  type NormalizationPlan,
+} from "./normalize.js";
 
 /**
  * The main Backpack API. Composes a StorageBackend with the Graph engine.
@@ -39,6 +44,7 @@ import {
 export class Backpack {
   private storage: StorageBackend;
   private graphs: Map<string, Graph> = new Map();
+  private versions: Map<string, number> = new Map();
   private tokenCache: Map<string, number> = new Map();
 
   constructor(storage: StorageBackend) {
@@ -56,17 +62,76 @@ export class Backpack {
       const data = await this.storage.loadOntology(ontologyName);
       graph = new Graph(data);
       this.graphs.set(ontologyName, graph);
+      // Record the version we loaded so persist() can pass it as
+      // expectedVersion for optimistic concurrency. Backends that don't
+      // support versioning return undefined (no check happens).
+      const version = await this.getVersionIfSupported(ontologyName);
+      if (version !== undefined) this.versions.set(ontologyName, version);
     }
     return graph;
   }
 
-  /** Save the current state of an ontology back to storage. */
+  private async getVersionIfSupported(name: string): Promise<number | undefined> {
+    if (
+      "getCurrentVersion" in this.storage &&
+      typeof (this.storage as any).getCurrentVersion === "function"
+    ) {
+      try {
+        return await (this.storage as any).getCurrentVersion(name);
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Save the current state of an ontology back to storage. Passes the
+   * version recorded at load time so the storage backend can detect
+   * concurrent modifications and reject the write. On conflict, the
+   * cache is invalidated and the underlying ConcurrencyError propagates.
+   */
   private async persist(ontologyName: string): Promise<void> {
     const graph = this.graphs.get(ontologyName);
-    if (graph) {
-      this.tokenCache.delete(ontologyName);
-      await this.storage.saveOntology(ontologyName, graph.data);
+    if (!graph) return;
+    this.tokenCache.delete(ontologyName);
+    const expectedVersion = this.versions.get(ontologyName);
+    try {
+      await this.storage.saveOntology(ontologyName, graph.data, expectedVersion);
+    } catch (err) {
+      if ((err as Error).name === "ConcurrencyError") {
+        // Drop the stale cache so the next read pulls fresh state
+        this.graphs.delete(ontologyName);
+        this.versions.delete(ontologyName);
+      }
+      throw err;
     }
+    // Refresh the version after a successful write. If the refresh
+    // fails (transient storage error), drop the cached version so the
+    // next persist skips the optimistic check rather than tripping a
+    // false ConcurrencyError on a stale value.
+    const newVersion = await this.getVersionIfSupported(ontologyName);
+    if (newVersion !== undefined) {
+      this.versions.set(ontologyName, newVersion);
+    } else {
+      this.versions.delete(ontologyName);
+    }
+  }
+
+  // --- Lock heartbeat (collaboration awareness) ---
+
+  /**
+   * Read the current lock heartbeat for a graph, if the storage backend
+   * supports it. Returns null when no fresh lock is held.
+   */
+  async getLockInfo(name: string): Promise<unknown | null> {
+    if (
+      "readLock" in this.storage &&
+      typeof (this.storage as any).readLock === "function"
+    ) {
+      return (this.storage as any).readLock(name);
+    }
+    return null;
   }
 
   // --- Term Registry ---
@@ -123,11 +188,15 @@ export class Backpack {
     if (await this.storage.ontologyExists(name)) {
       throw new Error(`Learning graph "${name}" already exists`);
     }
+    // Two-step: create the empty ontology first (so storage has metadata),
+    // then save the full payload (which diffs against empty and emits adds).
+    const description = data.metadata.description ?? "";
+    await this.storage.createOntology(name, description);
     const now = new Date().toISOString();
     const cleaned: LearningGraphData = {
       metadata: {
         name,
-        description: data.metadata.description ?? "",
+        description,
         createdAt: data.metadata.createdAt || now,
         updatedAt: now,
       },
@@ -151,6 +220,10 @@ export class Backpack {
     const edges = graph.data.edges.filter(
       (e) => idSet.has(e.sourceId) && idSet.has(e.targetId)
     );
+    // The filtered arrays already contain references owned by the source
+    // graph; createOntologyFromData persists via the storage layer which
+    // serializes through JSON, giving the new graph independent copies.
+    // No manual deep clone needed.
     const now = new Date().toISOString();
     const newData: LearningGraphData = {
       metadata: {
@@ -159,11 +232,10 @@ export class Backpack {
         createdAt: now,
         updatedAt: now,
       },
-      nodes: JSON.parse(JSON.stringify(nodes)),
-      edges: JSON.parse(JSON.stringify(edges)),
+      nodes,
+      edges,
     };
-    await this.storage.saveOntology(newName, newData);
-    this.graphs.set(newName, new Graph(newData));
+    await this.createOntologyFromData(newName, newData);
     return { nodeCount: nodes.length, edgeCount: edges.length };
   }
 
@@ -346,6 +418,50 @@ export class Backpack {
   async auditOntology(name: string): Promise<GraphAudit> {
     const graph = await this.getGraph(name);
     return graph.audit();
+  }
+
+  /**
+   * Plan a normalization pass: detect type drift clusters and pick
+   * the dominant variant in each. Returns the plan without applying it.
+   */
+  async planNormalization(name: string): Promise<NormalizationPlan> {
+    const graph = await this.getGraph(name);
+    return planNormalization(graph.data);
+  }
+
+  /**
+   * Apply a normalization plan to the graph: rename non-canonical
+   * node and edge types to their canonical variants. Uses the existing
+   * persist path, which emits retype events under the hood.
+   *
+   * Returns the plan that was applied plus a summary of counts.
+   */
+  async applyNormalization(name: string): Promise<{
+    plan: NormalizationPlan;
+    summary: ReturnType<typeof planSummary>;
+  }> {
+    const graph = await this.getGraph(name);
+    const plan = planNormalization(graph.data);
+
+    const nodeMap = new Map(plan.nodeTypeRenames.map((r) => [r.from, r.to]));
+    const edgeMap = new Map(plan.edgeTypeRenames.map((r) => [r.from, r.to]));
+
+    // Mutate the in-memory graph in place; persist() will diff and
+    // emit retype events.
+    for (const node of graph.data.nodes) {
+      const newType = nodeMap.get(node.type);
+      if (newType !== undefined) node.type = newType;
+    }
+    for (const edge of graph.data.edges) {
+      const newType = edgeMap.get(edge.type);
+      if (newType !== undefined) edge.type = newType;
+    }
+
+    if (plan.nodeTypeRenames.length > 0 || plan.edgeTypeRenames.length > 0) {
+      await this.persist(name);
+    }
+
+    return { plan, summary: planSummary(plan) };
   }
 
   /**

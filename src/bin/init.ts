@@ -1,21 +1,18 @@
 #!/usr/bin/env node
-import { ensureHooksInstalled } from "../core/hooks.js";
+import { removeBackpackHooks } from "../core/hooks.js";
 
 /**
- * `backpack-init` — manually install Backpack hooks.
- *
- * Note: Hooks are now installed automatically when the MCP server starts.
- * This command exists for users who want to explicitly reinstall or verify.
+ * `backpack-init` — clean up any Backpack hooks left in .claude/settings.json
+ * by older versions. Auto-installation of hooks is no longer supported; this
+ * command exists so users can explicitly run the cleanup without restarting
+ * their MCP server.
  */
 async function main() {
-  await ensureHooksInstalled();
+  await removeBackpackHooks();
   console.log("");
-  console.log("  Backpack hooks are installed.");
+  console.log("  Backpack hook cleanup complete.");
   console.log("");
-  console.log("  What's enabled:");
-  console.log("    - Update notifications: confirms when your backpack is updated.");
-  console.log("");
-  console.log("  To disable, remove the backpack hooks from .claude/settings.json");
+  console.log("  Backpack no longer installs hooks into .claude/settings.json.");
   console.log("");
 }
 

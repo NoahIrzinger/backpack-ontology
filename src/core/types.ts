@@ -186,7 +186,17 @@ export interface StorageBackend {
   initialize(): Promise<void>;
   listOntologies(): Promise<LearningGraphSummary[]>;
   loadOntology(name: string): Promise<LearningGraphData>;
-  saveOntology(name: string, data: LearningGraphData): Promise<void>;
+  /**
+   * Save the full graph state. If `expectedVersion` is provided and the
+   * backend supports optimistic concurrency, the write fails when the
+   * stored version differs (the backend throws ConcurrencyError).
+   * Backends that don't support versioning should ignore the parameter.
+   */
+  saveOntology(
+    name: string,
+    data: LearningGraphData,
+    expectedVersion?: number,
+  ): Promise<void>;
   createOntology(name: string, description: string): Promise<LearningGraphData>;
   deleteOntology(name: string): Promise<void>;
   renameOntology(oldName: string, newName: string): Promise<void>;

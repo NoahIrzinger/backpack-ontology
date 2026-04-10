@@ -4,6 +4,7 @@ import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
 import { estimateTokens, formatSavingsFooter } from "../../core/token-estimate.js";
 import { viewerUrl } from "./viewer-url.js";
+import { formatWriteError } from "./error-helpers.js";
 
 export function registerEdgeTools(
   server: McpServer,
@@ -48,12 +49,7 @@ export function registerEdgeTools(
           ],
         };
       } catch (err) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: ${(err as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatWriteError(backpack, ontology, err);
       }
     }
   );
@@ -79,12 +75,7 @@ export function registerEdgeTools(
           ],
         };
       } catch (err) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: ${(err as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatWriteError(backpack, ontology, err);
       }
     }
   );

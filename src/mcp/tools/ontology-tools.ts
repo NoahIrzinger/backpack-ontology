@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
 import { estimateTokens, formatSavingsFooter } from "../../core/token-estimate.js";
+import { formatWriteError } from "./error-helpers.js";
 
 export function registerOntologyTools(
   server: McpServer,
@@ -99,12 +100,7 @@ export function registerOntologyTools(
           ],
         };
       } catch (err) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: ${(err as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatWriteError(backpack, ontology, err);
       }
     }
   );
@@ -123,9 +119,10 @@ export function registerOntologyTools(
     async ({ ontology }) => {
       try {
         const info = await backpack.describeOntology(ontology);
-        trackEvent("tool_call", { tool: "backpack_describe" });
-        const responseText = JSON.stringify(info, null, 2);
         const graphTokens = await backpack.getGraphTokens(ontology);
+        trackEvent("tool_call", { tool: "backpack_describe" });
+        const enriched = { ...info, totalTokens: graphTokens };
+        const responseText = JSON.stringify(enriched, null, 2);
         const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
         const content: { type: "text"; text: string }[] = [
           { type: "text" as const, text: responseText },
@@ -214,6 +211,147 @@ export function registerOntologyTools(
   );
 
   server.registerTool(
+    "backpack_normalize",
+    {
+      title: "Normalize Type Drift",
+      description:
+        "Detect and consolidate type drift in a learning graph. Groups node types and edge types by case/separator-insensitive key and renames non-canonical variants to the dominant one (e.g. 'service' → 'Service' if 'Service' is more common). Defaults to dry-run for safety: returns the plan without writing. Pass dryRun=false explicitly to commit. Type renames preserve node IDs and edges.",
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph to normalize"),
+        dryRun: z
+          .boolean()
+          .optional()
+          .describe(
+            "Defaults to true (preview only). Set to false explicitly to apply the renames.",
+          ),
+      },
+    },
+    async ({ ontology, dryRun }) => {
+      // Default to dry-run if not specified — no surprising writes
+      const doDryRun = dryRun !== false;
+      try {
+        if (doDryRun) {
+          const plan = await backpack.planNormalization(ontology);
+          trackEvent("tool_call", {
+            tool: "backpack_normalize",
+            outcome: "dry_run",
+          });
+          const totalNode = plan.nodeTypeRenames.reduce((s, r) => s + r.count, 0);
+          const totalEdge = plan.edgeTypeRenames.reduce((s, r) => s + r.count, 0);
+          const empty =
+            plan.nodeTypeRenames.length === 0 &&
+            plan.edgeTypeRenames.length === 0;
+          const text = empty
+            ? `No type drift detected. Graph is already normalized.`
+            : `Normalization plan (dry run — nothing written):\n${JSON.stringify(plan, null, 2)}\n\n${plan.nodeTypeRenames.length} node type rename(s) affecting ${totalNode} node(s).\n${plan.edgeTypeRenames.length} edge type rename(s) affecting ${totalEdge} edge(s).\n\nCall again without dryRun (or dryRun=false) to apply.`;
+          return { content: [{ type: "text" as const, text }] };
+        }
+
+        const { plan, summary } = await backpack.applyNormalization(ontology);
+        trackEvent("tool_call", { tool: "backpack_normalize" });
+        const empty =
+          plan.nodeTypeRenames.length === 0 &&
+          plan.edgeTypeRenames.length === 0;
+        const text = empty
+          ? `No type drift detected. Nothing changed.`
+          : `Normalization applied.\n${summary.nodeRenameCount} node type rename(s) affecting ${summary.totalAffectedNodes} node(s).\n${summary.edgeRenameCount} edge type rename(s) affecting ${summary.totalAffectedEdges} edge(s).\n\nPlan:\n${JSON.stringify(plan, null, 2)}`;
+        return { content: [{ type: "text" as const, text }] };
+      } catch (err) {
+        return formatWriteError(backpack, ontology, err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "backpack_lock_status",
+    {
+      title: "Lock Status",
+      description:
+        "Read the current edit heartbeat for a learning graph. Returns the most recent author and timestamp if there's been activity in the last 5 minutes, otherwise null. Use this to see whether a collaborator is currently editing a shared graph before starting your own changes.",
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph to check"),
+      },
+    },
+    async ({ ontology }) => {
+      try {
+        const lock = await backpack.getLockInfo(ontology);
+        trackEvent("tool_call", { tool: "backpack_lock_status" });
+        const text =
+          lock === null
+            ? `No active editor on "${ontology}". Safe to write.`
+            : `Active editor on "${ontology}":\n${JSON.stringify(lock, null, 2)}`;
+        return { content: [{ type: "text" as const, text }] };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    "backpack_health",
+    {
+      title: "Graph Health Check",
+      description:
+        "Run all audits on a learning graph in one call: connectivity audit, three-role rule audit, type drift detection (no commit), token count, lock status. Use this to get a complete picture of a graph's quality before deciding what to fix.",
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph to check"),
+      },
+    },
+    async ({ ontology }) => {
+      try {
+        const [describe, audit, roles, normalize, lock, tokens] = await Promise.all([
+          backpack.describeOntology(ontology),
+          backpack.auditOntology(ontology),
+          backpack.auditRoles(ontology),
+          backpack.planNormalization(ontology),
+          backpack.getLockInfo(ontology),
+          backpack.getGraphTokens(ontology),
+        ]);
+        trackEvent("tool_call", { tool: "backpack_health" });
+        const report = {
+          name: ontology,
+          totalTokens: tokens,
+          nodeCount: describe.nodeCount,
+          edgeCount: describe.edgeCount,
+          density: describe.stats.density,
+          orphans: audit.orphans.length,
+          weakNodes: audit.weakNodes.length,
+          sparseTypes: audit.sparseTypes.length,
+          roleViolations: {
+            procedural: roles.proceduralCandidates.length,
+            briefing: roles.briefingCandidates.length,
+          },
+          typeDrift: {
+            nodeRenames: normalize.nodeTypeRenames.length,
+            edgeRenames: normalize.edgeTypeRenames.length,
+          },
+          activeEditor: lock,
+          suggestions: audit.suggestions,
+        };
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(report, null, 2) },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.registerTool(
     "backpack_stats",
     {
       title: "Graph Statistics",
@@ -283,12 +421,7 @@ export function registerOntologyTools(
           ],
         };
       } catch (err) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: ${(err as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatWriteError(backpack, ontology, err);
       }
     }
   );

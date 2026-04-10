@@ -227,13 +227,32 @@ describe("diffToEvents — basic", () => {
     expect(update.properties).toEqual({ b: null });
   });
 
-  it("emits remove+add for type change", () => {
+  it("emits node.retype for type change (preserves ID + edges)", () => {
     const before = { ...emptyData(), nodes: [makeNode("n1", "Concept")] };
     const after = { ...emptyData(), nodes: [makeNode("n1", "Topic")] };
     const events = diffToEvents(before, after);
-    expect(events).toHaveLength(2);
-    expect(events[0].op).toBe("node.remove");
-    expect(events[1].op).toBe("node.add");
+    expect(events).toHaveLength(1);
+    expect(events[0].op).toBe("node.retype");
+    if (events[0].op === "node.retype") {
+      expect(events[0].id).toBe("n1");
+      expect(events[0].type).toBe("Topic");
+    }
+  });
+
+  it("emits edge.retype for edge type change", () => {
+    const before = {
+      ...emptyData(),
+      nodes: [makeNode("n1"), makeNode("n2")],
+      edges: [{ ...makeEdge("e1", "n1", "n2"), type: "DEPENDS_ON" }],
+    };
+    const after = {
+      ...emptyData(),
+      nodes: [makeNode("n1"), makeNode("n2")],
+      edges: [{ ...makeEdge("e1", "n1", "n2"), type: "depends_on" }],
+    };
+    const events = diffToEvents(before, after);
+    expect(events).toHaveLength(1);
+    expect(events[0].op).toBe("edge.retype");
   });
 
   it("emits edge.add for new edges", () => {

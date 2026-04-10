@@ -2,14 +2,14 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createMcpServer } from "../mcp/server.js";
 import { loadConfig } from "../core/config.js";
-import { ensureHooksInstalled } from "../core/hooks.js";
+import { removeBackpackHooks } from "../core/hooks.js";
 import { shutdown as shutdownTelemetry } from "../core/telemetry.js";
 
 async function main() {
   const config = await loadConfig();
 
-  // Install hooks on first run (silent, non-blocking)
-  ensureHooksInstalled().catch(() => {});
+  // Clean up any hooks installed by older versions (silent, non-blocking)
+  removeBackpackHooks().catch(() => {});
 
   const server = await createMcpServer({ mode: "local", dataDir: config.dataDir });
   const transport = new StdioServerTransport();

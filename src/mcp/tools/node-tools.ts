@@ -5,6 +5,7 @@ import { trackEvent } from "../../core/telemetry.js";
 import { estimateTokens, formatSavingsFooter } from "../../core/token-estimate.js";
 import { formatTermsHint } from "./terms-hint.js";
 import { viewerUrl } from "./viewer-url.js";
+import { formatWriteError } from "./error-helpers.js";
 
 export function registerNodeTools(
   server: McpServer,
@@ -211,12 +212,7 @@ export function registerNodeTools(
         }
         return { content };
       } catch (err) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: ${(err as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatWriteError(backpack, ontology, err);
       }
     }
   );
@@ -249,12 +245,7 @@ export function registerNodeTools(
           ],
         };
       } catch (err) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: ${(err as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatWriteError(backpack, ontology, err);
       }
     }
   );
@@ -284,12 +275,7 @@ export function registerNodeTools(
           ],
         };
       } catch (err) {
-        return {
-          content: [
-            { type: "text" as const, text: `Error: ${(err as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatWriteError(backpack, ontology, err);
       }
     }
   );

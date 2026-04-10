@@ -58,6 +58,33 @@ interface GraphMetadataFile {
 const SCHEMA_VERSION = 1;
 const DEFAULT_BRANCH = "main";
 
+/** How long a heartbeat is considered "fresh" before it's treated as stale. */
+export const LOCK_FRESH_MS = 5 * 60 * 1000;
+
+export interface LockInfo {
+  author: string;
+  lastActivity: string;
+  hostname?: string;
+  pid?: number;
+}
+
+/**
+ * Error thrown when an optimistic-concurrency write detects that the
+ * underlying graph has been modified since the caller loaded it.
+ */
+export class ConcurrencyError extends Error {
+  constructor(
+    public readonly graph: string,
+    public readonly expectedVersion: number,
+    public readonly actualVersion: number,
+  ) {
+    super(
+      `version conflict on "${graph}": expected ${expectedVersion}, found ${actualVersion}`,
+    );
+    this.name = "ConcurrencyError";
+  }
+}
+
 function emptyGraphData(name: string, description: string): LearningGraphData {
   const now = new Date().toISOString();
   return {
@@ -144,6 +171,10 @@ export class EventSourcedBackend implements StorageBackend {
 
   private termsFile(name: string): string {
     return path.join(this.graphDir(name), "terms.json");
+  }
+
+  private lockFile(name: string): string {
+    return path.join(this.graphDir(name), ".lock");
   }
 
   // --- IO helpers ---
@@ -278,9 +309,7 @@ export class EventSourcedBackend implements StorageBackend {
     if (expectedVersion !== undefined) {
       const current = await this.eventCount(name, branch);
       if (current !== expectedVersion) {
-        throw new Error(
-          `version conflict on ${name}/${branch}: expected ${expectedVersion}, found ${current}`,
-        );
+        throw new ConcurrencyError(name, expectedVersion, current);
       }
     }
 
@@ -322,6 +351,231 @@ export class EventSourcedBackend implements StorageBackend {
 
   async initialize(): Promise<void> {
     await fs.mkdir(this.graphsDir(), { recursive: true });
+    // Auto-migrate any graphs from the legacy 0.2.x format on first start.
+    // Idempotent — re-running it skips already-converted branches. Failures
+    // are logged to stderr but do not block startup.
+    try {
+      await this.autoMigrateLegacyGraphs();
+    } catch (err) {
+      console.error(
+        `[backpack] auto-migration encountered an error: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Acquire an exclusive cross-process migration lock for a single graph
+   * by creating `.migration-lock` with O_EXCL. Two MCP instances starting
+   * simultaneously can't both convert the same legacy directory.
+   * Returns true on success, false if another process holds the lock.
+   */
+  private async tryAcquireMigrationLock(name: string): Promise<boolean> {
+    const lockPath = path.join(this.graphDir(name), ".migration-lock");
+    try {
+      const fd = await fs.open(lockPath, "wx");
+      await fd.close();
+      return true;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") return false;
+      throw err;
+    }
+  }
+
+  private async releaseMigrationLock(name: string): Promise<void> {
+    const lockPath = path.join(this.graphDir(name), ".migration-lock");
+    await fs.rm(lockPath).catch(() => {});
+  }
+
+  /**
+   * Detect and convert any 0.2.x format graphs to the new event-sourced
+   * layout. Runs once on initialize(); idempotent across restarts.
+   *
+   * Old layout:
+   *   graphs/<name>/meta.json + branches/<branch>.json
+   * New layout:
+   *   graphs/<name>/metadata.json + branches/<branch>/{events.jsonl, snapshot.json}
+   */
+  private async autoMigrateLegacyGraphs(): Promise<void> {
+    let entries: string[];
+    try {
+      entries = await fs.readdir(this.graphsDir());
+    } catch {
+      return;
+    }
+    for (const name of entries) {
+      // Skip anything that isn't a plausible graph directory name.
+      // Defends against hidden files (.DS_Store), traversal (.., .),
+      // and accidental symlinks.
+      if (name.startsWith(".")) continue;
+      if (name.includes("/") || name.includes("\\")) continue;
+      try {
+        const graphDir = path.join(this.graphsDir(), name);
+        const stat = await fs.lstat(graphDir);
+        if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
+      } catch {
+        continue;
+      }
+      // Acquire a per-graph lock to prevent two MCP instances from
+      // racing on the same legacy directory.
+      let locked = false;
+      try {
+        locked = await this.tryAcquireMigrationLock(name);
+      } catch (err) {
+        console.error(
+          `[backpack] failed to acquire migration lock for "${name}": ${(err as Error).message}`,
+        );
+        continue;
+      }
+      if (!locked) continue;
+      try {
+        await this.migrateOneGraph(name);
+      } catch (err) {
+        console.error(
+          `[backpack] migration failed for "${name}": ${(err as Error).message}`,
+        );
+      } finally {
+        await this.releaseMigrationLock(name);
+      }
+    }
+  }
+
+  private async migrateOneGraph(name: string): Promise<void> {
+    const graphDir = this.graphDir(name);
+    const newMetaPath = this.metadataFile(name);
+    const oldMetaPath = path.join(graphDir, "meta.json");
+    const branchesDir = this.branchesDir(name);
+
+    let branchEntries: string[];
+    try {
+      branchEntries = await fs.readdir(branchesDir);
+    } catch {
+      return;
+    }
+    const legacyBranchFiles = branchEntries.filter((e) => e.endsWith(".json"));
+
+    // Nothing to do if there are no legacy files left to convert
+    if (legacyBranchFiles.length === 0) return;
+
+    const hasNewMeta = await this.fileExists(newMetaPath);
+
+    // Determine activeBranch from old meta.json (default "main")
+    let activeBranch = DEFAULT_BRANCH;
+    if (await this.fileExists(oldMetaPath)) {
+      try {
+        const oldMeta = JSON.parse(await fs.readFile(oldMetaPath, "utf8"));
+        if (oldMeta && typeof oldMeta.activeBranch === "string") {
+          activeBranch = oldMeta.activeBranch;
+        }
+      } catch {}
+    }
+
+    // Synthesize metadata.json from a seed branch if missing
+    if (!hasNewMeta) {
+      const seedFile =
+        legacyBranchFiles.find((f) => f === `${activeBranch}.json`) ||
+        legacyBranchFiles[0];
+      if (!seedFile) return;
+      let seedData: any;
+      try {
+        seedData = JSON.parse(
+          await fs.readFile(path.join(branchesDir, seedFile), "utf8"),
+        );
+      } catch {
+        return;
+      }
+      const now = new Date().toISOString();
+      const meta: GraphMetadataFile = {
+        name: seedData?.metadata?.name || name,
+        description: seedData?.metadata?.description || "",
+        defaultBranch: activeBranch,
+        schemaVersion: SCHEMA_VERSION,
+        createdAt: seedData?.metadata?.createdAt || now,
+        updatedAt: now,
+      };
+      await this.writeMetadata(name, meta);
+    }
+
+    // Convert each legacy branch file
+    for (const branchFile of legacyBranchFiles) {
+      try {
+        await this.migrateOneBranchFile(name, branchFile);
+      } catch {
+        // Leave the legacy file in place if conversion failed
+      }
+    }
+
+    // Remove old meta.json after successful conversion
+    if (await this.fileExists(oldMetaPath)) {
+      await fs.rm(oldMetaPath).catch(() => {});
+    }
+  }
+
+  private async migrateOneBranchFile(
+    name: string,
+    branchFile: string,
+  ): Promise<void> {
+    const branchName = branchFile.replace(/\.json$/, "");
+    const oldPath = path.join(this.branchesDir(name), branchFile);
+    const newDir = this.branchDir(name, branchName);
+    const eventsPath = this.eventsFile(name, branchName);
+    const snapshotPath = this.snapshotFile(name, branchName);
+
+    // If new layout already exists, drop the legacy file and stop
+    if (await this.fileExists(eventsPath)) {
+      await fs.rm(oldPath).catch(() => {});
+      return;
+    }
+
+    let data: any;
+    try {
+      data = JSON.parse(await fs.readFile(oldPath, "utf8"));
+    } catch {
+      return;
+    }
+    if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+      return;
+    }
+
+    await fs.mkdir(newDir, { recursive: true });
+
+    const author =
+      this.author ?? `migration@${process.env.HOSTNAME ?? "local"}`;
+    const ts = new Date().toISOString();
+    const events: GraphEvent[] = [];
+    for (const node of data.nodes) {
+      events.push({
+        v: 1,
+        ts,
+        author,
+        op: "node.add",
+        node,
+      } as GraphEvent);
+    }
+    for (const edge of data.edges) {
+      events.push({
+        v: 1,
+        ts,
+        author,
+        op: "edge.add",
+        edge,
+      } as GraphEvent);
+    }
+    const lines =
+      events.map((e) => JSON.stringify(e)).join("\n") + (events.length ? "\n" : "");
+    await this.writeAtomic(eventsPath, lines);
+    await this.writeAtomic(snapshotPath, JSON.stringify(data, null, 2));
+
+    // Remove the legacy monolithic file
+    await fs.rm(oldPath).catch(() => {});
+  }
+
+  private async fileExists(p: string): Promise<boolean> {
+    try {
+      await fs.access(p);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async listOntologies(): Promise<LearningGraphSummary[]> {
@@ -342,8 +596,11 @@ export class EventSourcedBackend implements StorageBackend {
         for (const node of state.nodes) {
           typeCounts.set(node.type, (typeCounts.get(node.type) ?? 0) + 1);
         }
+        // Use the directory name as the canonical identifier — that's
+        // what loadOntology takes. metadata.name can drift from the dir
+        // name through historical renames.
         summaries.push({
-          name: meta.name,
+          name: entry,
           description: meta.description,
           nodeCount: state.nodes.length,
           edgeCount: state.edges.length,
@@ -363,12 +620,28 @@ export class EventSourcedBackend implements StorageBackend {
     return this.loadBranchSnapshot(name, meta.defaultBranch);
   }
 
-  async saveOntology(name: string, data: LearningGraphData): Promise<void> {
+  /**
+   * Load the current event count for the default branch — used by
+   * Backpack as the optimistic-concurrency version token.
+   */
+  async getCurrentVersion(name: string): Promise<number> {
+    const meta = await this.loadMetadata(name);
+    return this.eventCount(name, meta.defaultBranch);
+  }
+
+  async saveOntology(
+    name: string,
+    data: LearningGraphData,
+    expectedVersion?: number,
+  ): Promise<void> {
     const meta = await this.loadMetadata(name);
     const before = await this.loadBranchSnapshot(name, meta.defaultBranch);
     const events = diffToEvents(before, data, this.author);
     if (events.length === 0) return;
-    await this.appendEvents(name, meta.defaultBranch, events);
+    await this.appendEvents(name, meta.defaultBranch, events, expectedVersion);
+
+    // Heartbeat: every successful write touches the lock file
+    await this.touchLock(name).catch(() => {});
 
     if (
       data.metadata.name !== meta.name ||
@@ -379,6 +652,47 @@ export class EventSourcedBackend implements StorageBackend {
       meta.updatedAt = new Date().toISOString();
       await this.writeMetadata(name, meta);
     }
+  }
+
+  // --- Lockfile heartbeat ---
+
+  /**
+   * Touch the lock file with the current author + timestamp. Called
+   * automatically on every successful write. Safe to call concurrently;
+   * the file is overwritten atomically.
+   */
+  async touchLock(name: string): Promise<void> {
+    const lock: LockInfo = {
+      author: this.author ?? "unknown",
+      lastActivity: new Date().toISOString(),
+      hostname:
+        typeof process !== "undefined" ? process.env.HOSTNAME : undefined,
+      pid: typeof process !== "undefined" ? process.pid : undefined,
+    };
+    await this.writeAtomic(this.lockFile(name), JSON.stringify(lock));
+  }
+
+  /**
+   * Read the lock file. Returns null if no lock exists, or if the lock
+   * is stale (older than LOCK_FRESH_MS).
+   */
+  async readLock(name: string): Promise<LockInfo | null> {
+    let raw: string;
+    try {
+      raw = await fs.readFile(this.lockFile(name), "utf8");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw err;
+    }
+    let lock: LockInfo;
+    try {
+      lock = JSON.parse(raw) as LockInfo;
+    } catch {
+      return null;
+    }
+    const age = Date.now() - new Date(lock.lastActivity).getTime();
+    if (Number.isNaN(age) || age > LOCK_FRESH_MS) return null;
+    return lock;
   }
 
   async createOntology(
