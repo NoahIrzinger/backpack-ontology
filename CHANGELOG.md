@@ -1,6 +1,20 @@
 # Changelog
 
-## 0.3.0 (unreleased)
+## 0.3.1 (2026-04-10)
+
+### Docs
+- **README now recommends the Claude Code plugin** as the primary install
+  path for Claude Code users. The plugin bundles this MCP server with two
+  skills (`backpack-guide` and `backpack-mine`) — without it, Claude Code
+  users get the tools but not the guidance on how to use them.
+- Manual `claude mcp add backpack-local` install is still documented for
+  advanced users and other MCP clients (Cursor, Zed, Continue, etc).
+- Fixed stale storage path in the data & privacy section
+  (`~/.local/share/backpack/ontologies/` → current event-sourced layout).
+- Tools reference table updated with audit, normalize, health, snapshot,
+  rollback, branch, and lock-status tool categories that landed in 0.3.0.
+
+## 0.3.0 (2026-04-10)
 
 This release is a substantial overhaul of the storage layer, the write
 path, and the design center of Backpack. Existing 0.2.x graphs are

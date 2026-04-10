@@ -56,11 +56,24 @@ Your knowledge syncs across devices, you can share with your team, and you get a
 
 ### Backpack Local (offline, private)
 
-Prefer to keep everything on your machine? No account needed:
+Prefer to keep everything on your machine? No account needed.
+
+**If you're using Claude Code, install the plugin** — it bundles this MCP server together with two usage skills that teach Claude how to build and query learning graphs, including an autonomous mining loop for growing a graph from web sources:
+
+```
+/plugin marketplace add NoahIrzinger/backpack-ontology-plugin
+/plugin install backpack-ontology-plugin@NoahIrzinger-backpack-ontology-plugin
+```
+
+Restart Claude Code (or run `/reload-plugins`) and you're ready. Plugin repo: [backpack-ontology-plugin](https://github.com/NoahIrzinger/backpack-ontology-plugin).
+
+**Without the plugin (advanced, or other MCP clients):**
 
 ```bash
 claude mcp add backpack-local -s user -- npx backpack-ontology@latest
 ```
+
+This installs the MCP server directly but without the skills. You'll have the tools but not the guidance on how Claude should use them — the plugin is recommended unless you have a specific reason to skip it.
 
 You can always move to Backpack App later by telling Claude "sync my backpack to the cloud".
 
@@ -244,7 +257,7 @@ Across sessions, the real value is that the graph exists at all. It's built once
 
 ## Data and privacy
 
-**Backpack Local**: your data is stored as readable JSON files on your computer at `~/.local/share/backpack/ontologies/`. You can inspect, edit, back up, or version-control these files directly.
+**Backpack Local**: your data is stored at `~/.local/share/backpack/graphs/<graph-name>/` as an append-only event log per branch (`branches/<branch>/events.jsonl`) plus a materialized snapshot cache (`branches/<branch>/snapshot.json`). Both are human-readable, backupable, and version-controlable. Graphs from earlier versions are migrated to this format automatically on first start — nothing to do.
 
 **Backpack App**: your data is stored securely in our cloud infrastructure. See our [privacy policy](https://backpackontology.com/privacy) for details.
 
@@ -272,9 +285,14 @@ Claude uses these automatically. You don't need to call them directly.
 | Add a new learning graph | `backpack_create` |
 | Find something | `backpack_search`, `backpack_list_nodes` |
 | Get full details on an item | `backpack_get_node`, `backpack_get_neighbors` |
-| Add or update knowledge | `backpack_add_node`, `backpack_update_node`, `backpack_add_edge` |
-| Bulk import | `backpack_import_nodes` |
-| Clean up | `backpack_remove_node`, `backpack_remove_edge`, `backpack_delete` |
+| Add or update knowledge | `backpack_import_nodes` (preferred, with always-on validation), `backpack_add_node`, `backpack_update_node`, `backpack_add_edge` |
+| Audit and clean up drift | `backpack_audit`, `backpack_audit_roles`, `backpack_normalize`, `backpack_health` |
+| Snapshot and revert | `backpack_snapshot`, `backpack_versions`, `backpack_rollback`, `backpack_diff` |
+| Branches | `backpack_branch_create`, `backpack_branch_switch`, `backpack_branch_list` |
+| Collaboration awareness | `backpack_lock_status` (reads the current edit heartbeat on shared graphs) |
+| Delete | `backpack_remove_node`, `backpack_remove_edge`, `backpack_delete` |
+
+**Autonomous mining** (plugin-only): the `backpack-mine` skill in the [Claude Code plugin](https://github.com/NoahIrzinger/backpack-ontology-plugin) drives an iteration loop that finds sources on the web, extracts entities and relationships, validates each batch, and stops on convergence. Say "mine &lt;topic&gt; into a learning graph" and the skill takes over.
 
 ### Configuration
 
