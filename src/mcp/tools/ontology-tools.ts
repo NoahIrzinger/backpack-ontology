@@ -178,6 +178,42 @@ export function registerOntologyTools(
   );
 
   server.registerTool(
+    "backpack_audit_roles",
+    {
+      title: "Audit Three-Role Rule",
+      description:
+        "Scan a learning graph for nodes that violate the three-role rule. Flags procedural content (should be in a skill) and briefing content (should be in CLAUDE.md). Heuristic — conservative on purpose. Run periodically to catch drift.",
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        ontology: z
+          .string()
+          .describe("Name of the learning graph to audit for role-rule violations"),
+      },
+    },
+    async ({ ontology }) => {
+      try {
+        const result = await backpack.auditRoles(ontology);
+        trackEvent("tool_call", { tool: "backpack_audit_roles" });
+        const responseText = JSON.stringify(result, null, 2);
+        const graphTokens = await backpack.getGraphTokens(ontology);
+        const footer = formatSavingsFooter(graphTokens, estimateTokens(responseText));
+        const content: { type: "text"; text: string }[] = [
+          { type: "text" as const, text: responseText },
+        ];
+        if (footer) content.push({ type: "text" as const, text: footer });
+        return { content };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.registerTool(
     "backpack_stats",
     {
       title: "Graph Statistics",

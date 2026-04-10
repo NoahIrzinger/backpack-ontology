@@ -17,6 +17,7 @@ import type {
   GraphDegreeTable,
 } from "./types.js";
 import { estimateGraphTokens } from "./token-estimate.js";
+import { auditRoles, type RoleAuditResult } from "./role-audit.js";
 
 /**
  * The main Backpack API. Composes a StorageBackend with the Graph engine.
@@ -77,6 +78,14 @@ export class Backpack {
     return this.storage.listOntologies();
   }
 
+  async ontologyExists(name: string): Promise<boolean> {
+    return this.storage.ontologyExists(name);
+  }
+
+  async loadOntology(name: string): Promise<LearningGraphData> {
+    return this.storage.loadOntology(name);
+  }
+
   async createOntology(
     name: string,
     description: string
@@ -90,6 +99,37 @@ export class Backpack {
   async deleteOntology(name: string): Promise<void> {
     await this.storage.deleteOntology(name);
     this.graphs.delete(name);
+    this.tokenCache.delete(name);
+  }
+
+  /**
+   * Create a new ontology from a full LearningGraphData payload, preserving
+   * node and edge IDs. Used by remote graph import (where we want the local
+   * copy to have the same IDs as the source) and any other situation where
+   * a complete graph is constructed externally.
+   *
+   * Throws if an ontology with this name already exists.
+   */
+  async createOntologyFromData(
+    name: string,
+    data: LearningGraphData,
+  ): Promise<void> {
+    if (await this.storage.ontologyExists(name)) {
+      throw new Error(`Learning graph "${name}" already exists`);
+    }
+    const now = new Date().toISOString();
+    const cleaned: LearningGraphData = {
+      metadata: {
+        name,
+        description: data.metadata.description ?? "",
+        createdAt: data.metadata.createdAt || now,
+        updatedAt: now,
+      },
+      nodes: data.nodes,
+      edges: data.edges,
+    };
+    await this.storage.saveOntology(name, cleaned);
+    this.graphs.set(name, new Graph(cleaned));
     this.tokenCache.delete(name);
   }
 
@@ -281,6 +321,17 @@ export class Backpack {
   async auditOntology(name: string): Promise<GraphAudit> {
     const graph = await this.getGraph(name);
     return graph.audit();
+  }
+
+  /**
+   * Three-role-rule audit. Scans the graph for nodes that look like
+   * procedural content (should be a skill) or briefing content (should
+   * be in CLAUDE.md). Heuristic-based; conservative on purpose to avoid
+   * false positives.
+   */
+  async auditRoles(name: string): Promise<RoleAuditResult> {
+    const graph = await this.getGraph(name);
+    return auditRoles(graph.data.nodes);
   }
 
   async getDegreeTable(name: string): Promise<GraphDegreeTable> {
