@@ -482,20 +482,30 @@ describe("EventSourcedBackend — author attribution", () => {
     expect(events[1].author).toBe("bob@example");
   });
 
-  it("omits author field when not configured", async () => {
-    const backend = new EventSourcedBackend(tmpDir);
-    await backend.initialize();
-    await backend.createOntology("test", "");
-    const data = await backend.loadOntology("test");
-    data.nodes.push(makeNode("n1"));
-    await backend.saveOntology("test", data);
+  it("falls back to a generated docker-style author when none configured", async () => {
+    // Clear any BACKPACK_AUTHOR env var so we exercise the generator path
+    const savedEnv = process.env.BACKPACK_AUTHOR;
+    delete process.env.BACKPACK_AUTHOR;
+    try {
+      const backend = new EventSourcedBackend(tmpDir);
+      await backend.initialize();
+      await backend.createOntology("test", "");
+      const data = await backend.loadOntology("test");
+      data.nodes.push(makeNode("n1"));
+      await backend.saveOntology("test", data);
 
-    const eventsRaw = await fs.readFile(
-      path.join(tmpDir, "graphs", "test", "branches", "main", "events.jsonl"),
-      "utf8",
-    );
-    const events = parseEventLog(eventsRaw);
-    expect(events[0].author).toBeUndefined();
+      const eventsRaw = await fs.readFile(
+        path.join(tmpDir, "graphs", "test", "branches", "main", "events.jsonl"),
+        "utf8",
+      );
+      const events = parseEventLog(eventsRaw);
+      // Author is always a real string now — never undefined, never "unknown"
+      expect(typeof events[0].author).toBe("string");
+      expect(events[0].author).not.toBe("unknown");
+      expect(events[0].author).toMatch(/^[a-z]+-[a-z]+$/);
+    } finally {
+      if (savedEnv !== undefined) process.env.BACKPACK_AUTHOR = savedEnv;
+    }
   });
 });
 

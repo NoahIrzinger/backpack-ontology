@@ -29,6 +29,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { dataDir } from "../core/paths.js";
+import { resolveAuthorName } from "../core/author-name.js";
 import {
   applyEvents,
   diffToEvents,
@@ -119,22 +120,25 @@ export interface EventSourcedBackendOptions {
 export class EventSourcedBackend implements StorageBackend {
   private baseDir: string;
   private graphsDirOverride: string | undefined;
-  private author: string | undefined;
+  private author: string;
 
   constructor(baseDir?: string, options?: EventSourcedBackendOptions) {
     this.baseDir = baseDir ?? dataDir();
     this.graphsDirOverride = options?.graphsDirOverride;
-    this.author =
-      options?.author ?? process.env.BACKPACK_AUTHOR ?? undefined;
+    // Always resolve to a real name — explicit option, env var, or a
+    // deterministic docker-style fallback like "cosmic-narwhal" derived
+    // from the machine fingerprint. Never falls back to "unknown".
+    this.author = resolveAuthorName(options?.author);
   }
 
   /**
    * Set the author identifier used for newly-emitted events. Pass
-   * undefined to clear it. Useful in tests and in long-running
-   * processes where the active user changes.
+   * undefined to reset to the resolved default (env var or generated
+   * docker-style name). Useful in tests and in long-running processes
+   * where the active user changes.
    */
   setAuthor(author: string | undefined): void {
-    this.author = author;
+    this.author = resolveAuthorName(author);
   }
 
   getAuthor(): string | undefined {
@@ -548,8 +552,7 @@ export class EventSourcedBackend implements StorageBackend {
 
     await fs.mkdir(newDir, { recursive: true });
 
-    const author =
-      this.author ?? `migration@${process.env.HOSTNAME ?? "local"}`;
+    const author = this.author;
     const ts = new Date().toISOString();
     const events: GraphEvent[] = [];
     for (const node of data.nodes) {
@@ -673,7 +676,7 @@ export class EventSourcedBackend implements StorageBackend {
    */
   async touchLock(name: string): Promise<void> {
     const lock: LockInfo = {
-      author: this.author ?? "unknown",
+      author: this.author,
       lastActivity: new Date().toISOString(),
       hostname:
         typeof process !== "undefined" ? process.env.HOSTNAME : undefined,

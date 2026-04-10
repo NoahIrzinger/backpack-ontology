@@ -31,6 +31,9 @@ export {
 } from "./storage/event-sourced-backend.js";
 export type { LockInfo } from "./storage/event-sourced-backend.js";
 
+// Author name generator (docker-style fallback when BACKPACK_AUTHOR is unset)
+export { generateAuthorName, resolveAuthorName } from "./core/author-name.js";
+
 // Backpacks registry (multi-backpack management)
 export {
   loadRegistry,

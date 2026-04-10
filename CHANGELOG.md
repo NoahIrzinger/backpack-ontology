@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.2 (2026-04-10)
+
+### Friendly default author names (no more "unknown")
+- **New `src/core/author-name.ts`** module with a docker-style
+  deterministic name generator. When `BACKPACK_AUTHOR` is unset, the
+  backend falls back to a stable two-word name derived from the
+  machine's hostname + platform + arch — e.g. `cosmic-narwhal`,
+  `brave-otter`, `zen-glacier`. Same machine always gets the same
+  name, so lock heartbeats are consistent across restarts without
+  needing a config file.
+- `EventSourcedBackend`'s author field is now always a real string,
+  never `undefined`. Event author attribution and lock heartbeat
+  badges in the viewer now show `editing: cosmic-narwhal` instead of
+  `editing: unknown` for users who haven't set `BACKPACK_AUTHOR`.
+- Users who set `BACKPACK_AUTHOR` explicitly get that value, same as
+  before. The generator is strictly a fallback.
+- 2500 possible combinations (50 adjectives × 50 nouns). Word lists
+  are SFW, positive, visually distinctive, and avoid naming specific
+  real people to sidestep cultural sensitivity.
+- New public API exports: `generateAuthorName()` and
+  `resolveAuthorName(explicit?)`.
+- 9 new tests. Total: **359 tests passing**.
+
 ## 0.5.1 (2026-04-10)
 
 ### Docs
