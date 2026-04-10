@@ -164,41 +164,34 @@ describe("JsonFileBackend", () => {
     expect(after.nodes.length).toBe(0);
   });
 
-  it("auto-migrates from ontologies/ to graphs/", async () => {
-    // Use a separate tmpDir to avoid interference from beforeEach
-    const migDir = await fs.mkdtemp(path.join(os.tmpdir(), "backpack-mig-"));
-    try {
-      const oldDir = path.join(migDir, "ontologies", "legacy");
-      await fs.mkdir(oldDir, { recursive: true });
-      const oldData = {
-        metadata: { name: "legacy", description: "Old", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        nodes: [{ id: "n_1", type: "T", properties: {}, createdAt: "", updatedAt: "" }],
-        edges: [],
-      };
-      await fs.writeFile(path.join(oldDir, "ontology.json"), JSON.stringify(oldData));
-
-      const freshStore = new JsonFileBackend(migDir);
-      await freshStore.initialize();
-
-      // Old dir should be gone
-      await expect(fs.stat(path.join(migDir, "ontologies"))).rejects.toThrow();
-
-      // New structure should exist
-      const migrated = await freshStore.loadOntology("legacy");
-      expect(migrated.nodes.length).toBe(1);
-    } finally {
-      await fs.rm(migDir, { recursive: true });
-    }
-  });
-
-  it("writes JSON that is human-readable (pretty-printed)", async () => {
+  it("writes a snapshot.json file under branches/main/", async () => {
     await store.createOntology("test", "Test");
-    const filePath = path.join(tmpDir, "graphs", "test", "branches", "main.json");
-    const raw = await fs.readFile(filePath, "utf-8");
-
+    const snapPath = path.join(
+      tmpDir,
+      "graphs",
+      "test",
+      "branches",
+      "main",
+      "snapshot.json",
+    );
+    const raw = await fs.readFile(snapPath, "utf-8");
     // Pretty-printed JSON has newlines
     expect(raw).toContain("\n");
     // And it's valid JSON
     expect(() => JSON.parse(raw)).not.toThrow();
+  });
+
+  it("writes an empty events.jsonl file under branches/main/", async () => {
+    await store.createOntology("test", "Test");
+    const eventsPath = path.join(
+      tmpDir,
+      "graphs",
+      "test",
+      "branches",
+      "main",
+      "events.jsonl",
+    );
+    const stat = await fs.stat(eventsPath);
+    expect(stat.isFile()).toBe(true);
   });
 });

@@ -24,6 +24,7 @@ export type {
 
 // Storage backends
 export { JsonFileBackend } from "./storage/json-file-backend.js";
+export { EventSourcedBackend } from "./storage/event-sourced-backend.js";
 
 // Remote graph registry (subscriptions to graphs hosted at HTTPS URLs)
 export { RemoteRegistry, RemoteRegistryError } from "./core/remote-registry.js";
