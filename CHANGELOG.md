@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Synthesis-First Mining + Draft Phase (Phase 3)
+- **`backpack_import_nodes` validates every batch before committing.**
+  Errors block the commit (broken edges, self-loops, invalid property
+  shapes). Warnings are surfaced in the success response (type drift,
+  duplicates, three-role rule violations) so the agent can review and
+  consolidate later.
+- **New `dryRun` parameter** on `backpack_import_nodes`. When `true`,
+  the validator runs and returns warnings/errors without writing
+  anything. The agent can review then call again without `dryRun` to
+  commit. Recommended for batches over ~5 nodes.
+- New module `src/core/draft.ts` with the `validateProposal()` function:
+  pure validator for batched imports. Detects type drift (case- and
+  separator-insensitive matching against existing types), duplicate
+  nodes (same type + same label string), three-role rule violations
+  (reuses the existing role-audit heuristics), broken edge endpoints,
+  self-loops, and invalid property shapes. 26 tests.
+- New `Backpack.validateImport(name, nodes, edges)` method exposing the
+  validator over the storage backend.
+- Skill guide updated to teach the validation flow and the dry-run
+  pattern. `backpack_import_nodes` is now the preferred entry point for
+  any batch over ~3 nodes; single-node `backpack_add_node` is marked
+  "avoid in normal flows."
+
 ### Phase 2 carry-overs
 - **Author attribution on events.** `EventSourcedBackend` constructor
   accepts an optional `author` (defaults to the `BACKPACK_AUTHOR`

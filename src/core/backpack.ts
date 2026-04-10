@@ -18,6 +18,12 @@ import type {
 } from "./types.js";
 import { estimateGraphTokens } from "./token-estimate.js";
 import { auditRoles, type RoleAuditResult } from "./role-audit.js";
+import {
+  validateProposal,
+  type DraftResult,
+  type ProposedNode,
+  type ProposedEdge,
+} from "./draft.js";
 
 /**
  * The main Backpack API. Composes a StorageBackend with the Graph engine.
@@ -307,6 +313,25 @@ export class Backpack {
       edgeCount: result.edgeIds.length,
       edgeIds: result.edgeIds,
     };
+  }
+
+  /**
+   * Validate a proposed batch of nodes and edges against the current
+   * graph state. Returns warnings (non-fatal — type drift, duplicates,
+   * three-role rule violations) and errors (fatal — broken edges,
+   * invalid property shapes).
+   *
+   * Pure check: does NOT modify the graph. Used by `backpack_import_nodes`
+   * for the always-on validation pass and by `dryRun` mode for explicit
+   * propose-only invocations.
+   */
+  async validateImport(
+    ontologyName: string,
+    nodes: ProposedNode[],
+    edges: ProposedEdge[] = [],
+  ): Promise<DraftResult> {
+    const graph = await this.getGraph(ontologyName);
+    return validateProposal(graph.data, nodes, edges);
   }
 
   async getGraphTokens(name: string): Promise<number> {

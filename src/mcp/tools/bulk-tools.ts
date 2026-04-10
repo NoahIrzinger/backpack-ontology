@@ -13,7 +13,7 @@ export function registerBulkTools(
     {
       title: "Import Nodes",
       description:
-        "Add multiple items and their relationships to a learning graph in one call. Each item needs a type and properties. Edges reference new nodes by array index (0-based) or existing nodes by ID string.",
+        "Add multiple items and their relationships to a learning graph in one call. The batch is validated first: errors block the commit, warnings (type drift, duplicates, three-role rule violations) are surfaced in the response. Pass dryRun=true to get the validation result without committing. Edges reference new nodes by array index (0-based) or existing nodes by ID string.",
       inputSchema: {
         ontology: z.string().describe("Name of the learning graph"),
         nodes: z
@@ -52,31 +52,94 @@ export function registerBulkTools(
           .describe(
             "Optional array of edges to create between imported and/or existing nodes"
           ),
+        dryRun: z
+          .boolean()
+          .optional()
+          .describe(
+            "If true, validate and return warnings/errors without committing. Use this to review a batch before writing."
+          ),
       },
     },
-    async ({ ontology, nodes, edges }) => {
+    async ({ ontology, nodes, edges, dryRun }) => {
       try {
+        const proposedNodes = nodes as Array<{
+          type: string;
+          properties: Record<string, unknown>;
+        }>;
+        const proposedEdges = edges as
+          | Array<{
+              type: string;
+              source: number | string;
+              target: number | string;
+              properties?: Record<string, unknown>;
+            }>
+          | undefined;
+
+        // Always validate the batch before any write
+        const validation = await backpack.validateImport(
+          ontology,
+          proposedNodes,
+          proposedEdges ?? [],
+        );
+
+        // Errors block the commit regardless of dryRun
+        if (!validation.ok) {
+          trackEvent("tool_call", {
+            tool: "backpack_import_nodes",
+            outcome: "validation_error",
+          });
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Import refused: ${validation.errors.length} error(s).\n${JSON.stringify(
+                  { errors: validation.errors, warnings: validation.warnings },
+                  null,
+                  2,
+                )}\n\nFix the errors and retry.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Dry run — return validation result without writing
+        if (dryRun) {
+          trackEvent("tool_call", {
+            tool: "backpack_import_nodes",
+            outcome: "dry_run",
+          });
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Dry run OK. Would import ${validation.newNodeCount} node(s) and ${validation.newEdgeCount} edge(s).${
+                  validation.warnings.length > 0
+                    ? `\n\n${validation.warnings.length} warning(s):\n${JSON.stringify(validation.warnings, null, 2)}\n\nReview the warnings, then call again with dryRun=false (or omit) to commit.`
+                    : "\n\nNo warnings — safe to commit."
+                }`,
+              },
+            ],
+          };
+        }
+
+        // Commit
         const result = await backpack.importNodes(
           ontology,
-          nodes as Array<{
-            type: string;
-            properties: Record<string, unknown>;
-          }>,
-          edges as
-            | Array<{
-                type: string;
-                source: number | string;
-                target: number | string;
-                properties?: Record<string, unknown>;
-              }>
-            | undefined
+          proposedNodes,
+          proposedEdges,
         );
         trackEvent("tool_call", { tool: "backpack_import_nodes" });
         const terms = await backpack.getTermsContext(ontology);
+        const summary = `Imported ${result.count} node(s) and ${result.edgeCount} edge(s).\nNode IDs: ${JSON.stringify(result.ids)}\nEdge IDs: ${JSON.stringify(result.edgeIds)}`;
+        const warningsSection =
+          validation.warnings.length > 0
+            ? `\n\n${validation.warnings.length} warning(s) to review (committed anyway):\n${JSON.stringify(validation.warnings, null, 2)}`
+            : "";
         const content: { type: "text"; text: string }[] = [
           {
             type: "text" as const,
-            text: `Imported ${result.count} node(s) and ${result.edgeCount} edge(s).\nNode IDs: ${JSON.stringify(result.ids)}\nEdge IDs: ${JSON.stringify(result.edgeIds)}`,
+            text: summary + warningsSection,
           },
         ];
         if (terms) {
