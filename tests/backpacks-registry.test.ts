@@ -10,14 +10,15 @@ import {
   getActiveBackpack,
   setActiveBackpack,
   getBackpack,
-  colorForName,
+  colorForPath,
+  deriveName,
   BackpackRegistryError,
 } from "../src/core/backpacks-registry.js";
 import { Backpack } from "../src/core/backpack.js";
 
-// These tests use BACKPACK_DIR to sandbox the registry files, so they
-// never touch the user's real ~/.config/backpack/. Every test runs in
-// its own tmpdir and cleans up afterward.
+// Tests sandbox the registry files via BACKPACK_DIR so they never touch
+// the user's real ~/.config/backpack/. Each test runs in its own tmpdir
+// and cleans up afterward.
 
 let sandbox: string;
 const envBackup: Record<string, string | undefined> = {};
@@ -38,104 +39,161 @@ afterEach(async () => {
   await fs.rm(sandbox, { recursive: true, force: true });
 });
 
-describe("colorForName", () => {
-  it("is deterministic — same name always yields the same color", () => {
-    expect(colorForName("personal")).toBe(colorForName("personal"));
-    expect(colorForName("work")).toBe(colorForName("work"));
+describe("colorForPath", () => {
+  it("is deterministic — same path always yields the same color", () => {
+    const p = "/Users/noah/OneDrive/work";
+    expect(colorForPath(p)).toBe(colorForPath(p));
   });
 
-  it("produces different colors for different names", () => {
-    const names = ["personal", "work", "family", "project-alpha", "research"];
-    const colors = names.map(colorForName);
+  it("produces different colors for different paths", () => {
+    const paths = [
+      "/Users/noah/OneDrive/work",
+      "/Users/noah/Dropbox/family",
+      "/Users/noah/.local/share/backpack/graphs",
+      "/Users/noah/projects/research",
+      "/Volumes/share/team",
+    ];
+    const colors = paths.map(colorForPath);
     const unique = new Set(colors);
-    // Not guaranteed to be 100% unique, but should be close — if all 5
-    // collide the hash is broken
+    // Should be close to unique — if they all collide, hash is broken
     expect(unique.size).toBeGreaterThanOrEqual(4);
   });
 
   it("returns a 7-char hex string starting with #", () => {
-    const c = colorForName("anything");
-    expect(c).toMatch(/^#[0-9a-f]{6}$/);
+    expect(colorForPath("/anything")).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});
+
+describe("deriveName", () => {
+  it("returns 'personal' for the default personal path", async () => {
+    // Seed the registry so the default path becomes known
+    const cfg = await loadRegistry();
+    const personal = cfg.paths[0];
+    const name = deriveName(personal, cfg.paths);
+    expect(name).toBe("personal");
+  });
+
+  it("uses the last segment of an ordinary path", () => {
+    const paths = ["/Users/noah/OneDrive/work"];
+    expect(deriveName("/Users/noah/OneDrive/work", paths)).toBe("work");
+  });
+
+  it("strips a trailing separator before taking the base", () => {
+    const paths = ["/Users/noah/OneDrive/work/"];
+    expect(deriveName("/Users/noah/OneDrive/work/", paths)).toBe("work");
+  });
+
+  it("appends -2, -3 on collision in registration order", () => {
+    const paths = [
+      "/Users/noah/OneDrive/shared",
+      "/Users/noah/Dropbox/shared",
+      "/Users/noah/iCloud/shared",
+    ];
+    expect(deriveName(paths[0], paths)).toBe("shared");
+    expect(deriveName(paths[1], paths)).toBe("shared-2");
+    expect(deriveName(paths[2], paths)).toBe("shared-3");
+  });
+
+  it("does not treat the personal path as colliding with a 'personal' name", async () => {
+    // If a user registers /some/path/personal alongside the default personal
+    // graphs dir, both should still be distinguishable
+    await loadRegistry();
+    const cfg = await loadRegistry();
+    const personalDefault = cfg.paths[0];
+    const otherPersonal = path.join(sandbox, "something", "personal");
+    const allPaths = [personalDefault, otherPersonal];
+    expect(deriveName(personalDefault, allPaths)).toBe("personal");
+    expect(deriveName(otherPersonal, allPaths)).toBe("personal-2");
   });
 });
 
 describe("registry seeding", () => {
-  it("first load seeds a 'personal' entry automatically", async () => {
+  it("first load seeds with the personal default path", async () => {
     const registry = await loadRegistry();
-    expect(registry.backpacks).toHaveLength(1);
-    expect(registry.backpacks[0].name).toBe("personal");
-    expect(registry.backpacks[0].color).toMatch(/^#[0-9a-f]{6}$/);
+    expect(registry.paths).toHaveLength(1);
+    expect(registry.active).toBe(registry.paths[0]);
   });
 
-  it("seeds active.json to 'personal' on first load", async () => {
-    await loadRegistry();
-    const active = await getActiveBackpack();
-    expect(active.name).toBe("personal");
-  });
-
-  it("second load reads the existing file without re-seeding", async () => {
+  it("second load reads the existing file unchanged", async () => {
     const first = await loadRegistry();
-    await registerBackpack("work", path.join(sandbox, "work-graphs"));
+    await registerBackpack(path.join(sandbox, "work"));
     const second = await loadRegistry();
-    expect(second.backpacks).toHaveLength(2);
-    expect(second.backpacks.map((b) => b.name).sort()).toEqual(["personal", "work"]);
-    expect(first.backpacks[0].name).toBe("personal");
+    expect(second.paths).toHaveLength(2);
+    expect(second.paths[0]).toBe(first.paths[0]);
+  });
+
+  it("derived list includes exactly the registered paths", async () => {
+    await loadRegistry();
+    await registerBackpack(path.join(sandbox, "work"));
+    await registerBackpack(path.join(sandbox, "family"));
+    const entries = await listBackpacks();
+    expect(entries).toHaveLength(3);
+    expect(entries.map((e) => e.name).sort()).toEqual([
+      "family",
+      "personal",
+      "work",
+    ]);
   });
 });
 
 describe("registerBackpack", () => {
-  it("adds a new backpack with a normalized absolute path", async () => {
+  it("adds a new absolute path", async () => {
     await loadRegistry();
-    const entry = await registerBackpack("work", path.join(sandbox, "work-dir"));
+    const target = path.join(sandbox, "work");
+    const entry = await registerBackpack(target);
+    expect(entry.path).toBe(path.resolve(target));
     expect(entry.name).toBe("work");
-    expect(path.isAbsolute(entry.path)).toBe(true);
-    expect(entry.color).toBe(colorForName("work"));
+    expect(entry.color).toBe(colorForPath(entry.path));
   });
 
   it("creates the target directory if it doesn't exist", async () => {
     await loadRegistry();
     const target = path.join(sandbox, "brand-new-dir");
-    await registerBackpack("brand-new", target);
+    await registerBackpack(target);
     const stat = await fs.stat(target);
     expect(stat.isDirectory()).toBe(true);
   });
 
-  it("rejects invalid names", async () => {
+  it("is idempotent — registering an existing path is a no-op", async () => {
     await loadRegistry();
-    await expect(
-      registerBackpack("Work With Spaces", path.join(sandbox, "x")),
-    ).rejects.toThrow(BackpackRegistryError);
-    await expect(
-      registerBackpack("UPPER", path.join(sandbox, "x")),
-    ).rejects.toThrow(BackpackRegistryError);
-    await expect(
-      registerBackpack("-leading-hyphen", path.join(sandbox, "x")),
-    ).rejects.toThrow(BackpackRegistryError);
+    const target = path.join(sandbox, "work");
+    const first = await registerBackpack(target);
+    const second = await registerBackpack(target);
+    expect(second.path).toBe(first.path);
+    const entries = await listBackpacks();
+    // Should still have exactly personal + work
+    expect(entries).toHaveLength(2);
   });
 
-  it("rejects duplicate names", async () => {
+  it("expands leading ~/ to the home directory", async () => {
     await loadRegistry();
-    await registerBackpack("work", path.join(sandbox, "work1"));
-    await expect(
-      registerBackpack("work", path.join(sandbox, "work2")),
-    ).rejects.toThrow(BackpackRegistryError);
-  });
-
-  it("persists across reloads", async () => {
-    await loadRegistry();
-    await registerBackpack("work", path.join(sandbox, "work"));
-    const after = await listBackpacks();
-    expect(after.map((b) => b.name)).toContain("work");
+    const target = path.join(os.homedir(), "_bp_test_tilde_expand_should_not_exist");
+    try {
+      const entry = await registerBackpack("~/_bp_test_tilde_expand_should_not_exist");
+      expect(entry.path).toBe(target);
+    } finally {
+      await fs.rm(target, { recursive: true, force: true }).catch(() => {});
+    }
   });
 });
 
 describe("unregisterBackpack", () => {
-  it("removes a registered backpack", async () => {
+  it("removes a registered path by path", async () => {
     await loadRegistry();
-    await registerBackpack("work", path.join(sandbox, "work"));
+    const work = path.join(sandbox, "work");
+    await registerBackpack(work);
+    await unregisterBackpack(work);
+    const entries = await listBackpacks();
+    expect(entries.map((e) => e.name)).not.toContain("work");
+  });
+
+  it("removes a registered path by derived name", async () => {
+    await loadRegistry();
+    const work = path.join(sandbox, "work");
+    await registerBackpack(work);
     await unregisterBackpack("work");
-    const remaining = await listBackpacks();
-    expect(remaining.map((b) => b.name)).not.toContain("work");
+    const entries = await listBackpacks();
+    expect(entries.map((e) => e.name)).not.toContain("work");
   });
 
   it("refuses to remove the last remaining backpack", async () => {
@@ -145,16 +203,17 @@ describe("unregisterBackpack", () => {
     );
   });
 
-  it("switches active to the first remaining when removing the active one", async () => {
+  it("auto-switches active to the first remaining when removing the active one", async () => {
     await loadRegistry();
-    await registerBackpack("work", path.join(sandbox, "work"));
+    const work = path.join(sandbox, "work");
+    await registerBackpack(work);
     await setActiveBackpack("work");
     expect((await getActiveBackpack()).name).toBe("work");
     await unregisterBackpack("work");
     expect((await getActiveBackpack()).name).toBe("personal");
   });
 
-  it("rejects removal of non-existent names", async () => {
+  it("rejects removal of non-existent names or paths", async () => {
     await loadRegistry();
     await expect(unregisterBackpack("ghost")).rejects.toThrow(
       BackpackRegistryError,
@@ -163,15 +222,24 @@ describe("unregisterBackpack", () => {
 });
 
 describe("active backpack resolution", () => {
-  it("defaults to 'personal' on first run", async () => {
+  it("defaults to the personal path on first run", async () => {
     const active = await getActiveBackpack();
     expect(active.name).toBe("personal");
   });
 
-  it("setActiveBackpack persists across calls", async () => {
+  it("setActiveBackpack by name persists", async () => {
     await loadRegistry();
-    await registerBackpack("work", path.join(sandbox, "work"));
+    await registerBackpack(path.join(sandbox, "work"));
     await setActiveBackpack("work");
+    const active = await getActiveBackpack();
+    expect(active.name).toBe("work");
+  });
+
+  it("setActiveBackpack by path also persists", async () => {
+    await loadRegistry();
+    const work = path.join(sandbox, "work");
+    await registerBackpack(work);
+    await setActiveBackpack(path.resolve(work));
     const active = await getActiveBackpack();
     expect(active.name).toBe("work");
   });
@@ -183,41 +251,130 @@ describe("active backpack resolution", () => {
     );
   });
 
-  it("BACKPACK_ACTIVE env var overrides the persisted active", async () => {
+  it("BACKPACK_ACTIVE env var overrides persisted active by name", async () => {
     await loadRegistry();
-    await registerBackpack("work", path.join(sandbox, "work"));
+    await registerBackpack(path.join(sandbox, "work"));
     await setActiveBackpack("personal");
-    // Env var override
     process.env.BACKPACK_ACTIVE = "work";
     const active = await getActiveBackpack();
     expect(active.name).toBe("work");
-    // Persisted active is still "personal" (env var didn't touch the file)
+    // Persisted active is untouched
     delete process.env.BACKPACK_ACTIVE;
-    const persisted = await getActiveBackpack();
-    expect(persisted.name).toBe("personal");
+    expect((await getActiveBackpack()).name).toBe("personal");
+  });
+
+  it("BACKPACK_ACTIVE env var also accepts an absolute path", async () => {
+    await loadRegistry();
+    const work = path.join(sandbox, "work");
+    await registerBackpack(work);
+    process.env.BACKPACK_ACTIVE = path.resolve(work);
+    const active = await getActiveBackpack();
+    expect(active.name).toBe("work");
   });
 
   it("BACKPACK_ACTIVE pointing at unknown name is ignored, not crashed", async () => {
     await loadRegistry();
     process.env.BACKPACK_ACTIVE = "ghost";
-    const active = await getActiveBackpack();
-    // Falls through to persisted (personal)
-    expect(active.name).toBe("personal");
+    expect((await getActiveBackpack()).name).toBe("personal");
   });
 });
 
-describe("getBackpack", () => {
+describe("getBackpack lookup", () => {
   it("returns null for unknown name", async () => {
     await loadRegistry();
     expect(await getBackpack("ghost")).toBeNull();
   });
 
-  it("returns the entry for a registered name", async () => {
+  it("finds by derived name", async () => {
     await loadRegistry();
-    await registerBackpack("work", path.join(sandbox, "work"));
+    await registerBackpack(path.join(sandbox, "work"));
     const entry = await getBackpack("work");
-    expect(entry).not.toBeNull();
     expect(entry?.name).toBe("work");
+  });
+
+  it("finds by absolute path", async () => {
+    await loadRegistry();
+    const work = path.join(sandbox, "work");
+    await registerBackpack(work);
+    const entry = await getBackpack(path.resolve(work));
+    expect(entry?.name).toBe("work");
+  });
+
+  it("path lookup normalizes tilde-expanded input", async () => {
+    await loadRegistry();
+    const tildeTarget = path.join(os.homedir(), "_bp_test_lookup_tilde");
+    try {
+      await registerBackpack(tildeTarget);
+      const found = await getBackpack("~/_bp_test_lookup_tilde");
+      expect(found?.path).toBe(tildeTarget);
+    } finally {
+      await fs.rm(tildeTarget, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+});
+
+describe("migration from legacy v1 format", () => {
+  it("converts { backpacks: [{name,path,color}] } to { paths, active }", async () => {
+    // Manually write a v1 file in the sandbox config dir
+    const configPath = path.join(sandbox, "config", "backpacks.json");
+    await fs.mkdir(path.dirname(configPath), { recursive: true });
+    await fs.writeFile(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        backpacks: [
+          { name: "personal", path: "/legacy/personal", color: "#aabbcc" },
+          { name: "work", path: "/legacy/work", color: "#ddeeff" },
+        ],
+      }),
+    );
+    // And the legacy active file
+    const activePath = path.join(sandbox, "config", "active.json");
+    await fs.writeFile(
+      activePath,
+      JSON.stringify({ version: 1, name: "work" }),
+    );
+
+    const cfg = await loadRegistry();
+    expect(cfg.version).toBe(2);
+    expect(cfg.paths).toEqual(["/legacy/personal", "/legacy/work"]);
+    expect(cfg.active).toBe("/legacy/work");
+
+    // Legacy active.json should be gone
+    await expect(fs.access(activePath)).rejects.toThrow();
+
+    // New file should have the v2 shape
+    const raw = await fs.readFile(configPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    expect(parsed.version).toBe(2);
+    expect(parsed).not.toHaveProperty("backpacks");
+    expect(parsed.paths).toBeDefined();
+  });
+
+  it("v1 with no legacy active.json falls back to the first path", async () => {
+    const configPath = path.join(sandbox, "config", "backpacks.json");
+    await fs.mkdir(path.dirname(configPath), { recursive: true });
+    await fs.writeFile(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        backpacks: [
+          { name: "personal", path: "/legacy/personal" },
+          { name: "work", path: "/legacy/work" },
+        ],
+      }),
+    );
+    const cfg = await loadRegistry();
+    expect(cfg.active).toBe("/legacy/personal");
+  });
+
+  it("garbage file is replaced with a fresh seeded registry", async () => {
+    const configPath = path.join(sandbox, "config", "backpacks.json");
+    await fs.mkdir(path.dirname(configPath), { recursive: true });
+    await fs.writeFile(configPath, '{"unrelated": true}');
+    const cfg = await loadRegistry();
+    expect(cfg.paths).toHaveLength(1);
+    expect(cfg.active).toBe(cfg.paths[0]);
   });
 });
 
@@ -229,37 +386,39 @@ describe("Backpack class switching", () => {
     expect(active?.name).toBe("personal");
   });
 
-  it("switchBackpack swaps the storage backend and clears caches", async () => {
+  it("switchBackpack by name swaps storage and clears caches", async () => {
     await loadRegistry();
-    await registerBackpack("work", path.join(sandbox, "work"));
+    await registerBackpack(path.join(sandbox, "work"));
 
     const bp = await Backpack.fromActiveBackpack();
     await bp.initialize();
 
-    // Create a graph in personal
     await bp.createOntology("p1", "personal graph");
     await bp.addNode("p1", "T", { name: "in-personal" });
-    const personalList = await bp.listOntologies();
-    expect(personalList.map((g) => g.name)).toContain("p1");
+    expect((await bp.listOntologies()).map((g) => g.name)).toContain("p1");
 
-    // Switch to work
     await bp.switchBackpack("work");
     expect(bp.getActiveBackpackEntry()?.name).toBe("work");
 
-    // Work should be empty — personal graph is invisible
-    const workList = await bp.listOntologies();
-    expect(workList.map((g) => g.name)).not.toContain("p1");
-    expect(workList).toHaveLength(0);
+    // Work is empty — personal graph is invisible
+    expect(await bp.listOntologies()).toHaveLength(0);
 
-    // Create a graph in work
     await bp.createOntology("w1", "work graph");
-    const workAfter = await bp.listOntologies();
-    expect(workAfter.map((g) => g.name)).toEqual(["w1"]);
+    expect((await bp.listOntologies()).map((g) => g.name)).toEqual(["w1"]);
 
-    // Switch back — personal should still have its graph
+    // Switch back — personal graph still there
     await bp.switchBackpack("personal");
-    const personalAfter = await bp.listOntologies();
-    expect(personalAfter.map((g) => g.name)).toEqual(["p1"]);
+    expect((await bp.listOntologies()).map((g) => g.name)).toEqual(["p1"]);
+  });
+
+  it("switchBackpack by path also works", async () => {
+    await loadRegistry();
+    const work = path.join(sandbox, "work");
+    await registerBackpack(work);
+    const bp = await Backpack.fromActiveBackpack();
+    await bp.initialize();
+    await bp.switchBackpack(path.resolve(work));
+    expect(bp.getActiveBackpackEntry()?.name).toBe("work");
   });
 
   it("switchBackpack rejects unknown names", async () => {

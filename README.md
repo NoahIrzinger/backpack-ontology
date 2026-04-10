@@ -277,17 +277,33 @@ Across sessions, the real value is that the graph exists at all. It's built once
 
 ### Multiple backpacks
 
-A **backpack** is a named directory of learning graphs. Most users start with one (`personal`, auto-created at `~/.local/share/backpack/graphs/`) and never touch the registry. But you can register additional backpacks — a shared OneDrive folder with a colleague, a project-specific directory, a family-shared set of notes — and **switch between them** with a single command. Only one backpack is active at a time; all reads and writes go to the active one.
+A **backpack** is a directory of learning graphs. Most users start with one (`personal`, auto-created at `~/.local/share/backpack/graphs/`) and never touch the registry. But you can register additional backpacks — a shared OneDrive folder, a project-specific directory, a network-mounted share — and **switch between them** with a single command. Only one backpack is active at a time; all reads and writes go to the active one.
+
+Backpacks are stored as a list of paths in `~/.config/backpack/backpacks.json`:
+
+```json
+{
+  "version": 2,
+  "paths": [
+    "/Users/me/.local/share/backpack/graphs",
+    "/Users/me/OneDrive/work",
+    "/Users/me/Dropbox/family-backpack"
+  ],
+  "active": "/Users/me/OneDrive/work"
+}
+```
+
+The file is hand-editable — you can add paths directly if you prefer. Display names are derived from the last segment of each path (`work`, `family-backpack`), and colors are hashed from the path. No manual naming or coloring required.
 
 Say to Claude:
 
-> "Register a backpack called 'work' at /Users/me/OneDrive/work-backpack and switch to it."
+> "Register a backpack at /Users/me/OneDrive/work and switch to it."
 
 > "Which backpack am I in?"
 
-> "Switch to the personal backpack."
+> "Switch to personal."
 
-The viewer shows the active backpack in the sidebar header with a colored indicator — click it to switch. Config (machine ID, telemetry, remote cache) stays per-user; only the graphs directory is shared.
+The viewer shows the active backpack in the sidebar header with a colored indicator — click it to switch. Per-user state (machine ID, telemetry, remote cache) stays at the default config location; only the graphs directory is shared.
 
 ### Tools
 

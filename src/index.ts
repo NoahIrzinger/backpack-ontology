@@ -40,7 +40,8 @@ export {
   unregisterBackpack,
   getActiveBackpack,
   setActiveBackpack,
-  colorForName,
+  colorForPath,
+  deriveName,
   BackpackRegistryError,
 } from "./core/backpacks-registry.js";
 export type { BackpackEntry } from "./core/backpacks-registry.js";

@@ -1,23 +1,36 @@
 // ============================================================
 // Registry of backpacks (graph directories).
 //
-// A "backpack" in this sense is a named pointer to a directory of
-// learning graphs. Users can have multiple backpacks (personal, work,
-// family, a shared OneDrive folder, etc) and switch between them —
-// only one is ever active at a time. All reads and writes go to the
-// active backpack's graphs directory.
+// A "backpack" is a named pointer to a directory of learning graphs.
+// Users can own multiple backpacks (personal, work, family, a shared
+// OneDrive folder, etc) and switch between them — only one is active
+// at a time. All reads and writes go to the active backpack's path.
 //
-// Two config files:
-//   ~/.config/backpack/backpacks.json   — registered backpack list
-//   ~/.config/backpack/active.json      — which one is active
+// On-disk config (single file):
+//   ~/.config/backpack/backpacks.json
+//   {
+//     "version": 2,
+//     "paths": [
+//       "/Users/noah/.local/share/backpack/graphs",
+//       "/Users/noah/OneDrive/work"
+//     ],
+//     "active": "/Users/noah/OneDrive/work"
+//   }
 //
-// Env var $BACKPACK_ACTIVE overrides the active.json selection for
-// the current process (useful for running two Claude Code sessions
-// against different backpacks from different shells).
+// Display names and colors are NOT stored — they're derived from the
+// path on every read. Name = last path segment, with "personal" as a
+// special case for the default personal graphs directory. Collisions
+// get "-2", "-3" suffixes in registration order. Color is a stable
+// hash of the path.
 //
-// On first run the registry is seeded with one backpack named
-// "personal" pointing at the user's existing graphs directory
-// (respecting BACKPACK_DIR / XDG_DATA_HOME for backward compat).
+// Env var $BACKPACK_ACTIVE overrides the persisted active for the
+// current process only (per-session isolation for power users).
+//
+// Auto-migration: on first load, if we see the old v1 format
+// ({ version: 1, backpacks: [{ name, path, color }] }), we extract
+// the paths, drop the names and colors, and rewrite the file as v2.
+// The old separate active.json file (also v1) is merged in as the
+// active path by looking up the path by name.
 // ============================================================
 
 import * as fs from "node:fs/promises";
@@ -28,28 +41,40 @@ import { configDir, dataDir } from "./paths.js";
 
 // --- Types ---
 
+/**
+ * A registered backpack as the user sees it. The path is the canonical
+ * identity. Name and color are derived from the path — not stored.
+ */
 export interface BackpackEntry {
-  /** Short unique name, kebab-case. */
-  name: string;
-  /** Absolute path to a directory that will hold learning graphs. */
+  /** Absolute filesystem path to the graphs directory. */
   path: string;
-  /** 6-digit hex color derived from the name hash (deterministic). */
+  /** Display name derived from the last path segment. */
+  name: string;
+  /** 6-digit hex color derived from a hash of the path. */
   color: string;
 }
 
+/**
+ * On-disk config file shape (v2).
+ */
 export interface BackpacksConfigFile {
   version: number;
-  backpacks: BackpackEntry[];
+  paths: string[];
+  active: string;
 }
 
-export interface ActiveConfigFile {
+// Legacy v1 shapes used by the migration code.
+interface LegacyBackpacksFileV1 {
+  version: number;
+  backpacks: Array<{ name: string; path: string; color?: string }>;
+}
+interface LegacyActiveFileV1 {
   version: number;
   name: string;
 }
 
-const CONFIG_VERSION = 1;
-const DEFAULT_NAME = "personal";
-const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+const CONFIG_VERSION = 2;
+const DEFAULT_PERSONAL_NAME = "personal";
 
 // --- Errors ---
 
@@ -63,43 +88,85 @@ export class BackpackRegistryError extends Error {
   }
 }
 
-// --- Helpers ---
+// --- Derivation helpers ---
 
 /**
- * Derive a stable 6-digit hex color from a backpack name. Same name
- * always produces the same color. Used for the viewer's per-backpack
- * indicator so users don't have to pick colors manually.
+ * The default personal graphs path. Honors BACKPACK_DIR and XDG_DATA_HOME
+ * so users who customized their data directory keep it.
  */
-export function colorForName(name: string): string {
-  const hash = crypto.createHash("sha256").update(name).digest();
-  // Take three bytes and constrain luminance so the color is readable
-  // on both light and dark backgrounds. Pull from different positions
-  // of the hash to avoid RGB correlation.
+function defaultPersonalPath(): string {
+  return path.join(dataDir(), "graphs");
+}
+
+/**
+ * Last non-empty path segment, used as the base for the display name.
+ * Strips trailing separators. For `/OneDrive/work/` returns `work`.
+ */
+function basename(p: string): string {
+  const trimmed = p.replace(/[/\\]+$/, "");
+  const parts = trimmed.split(/[/\\]/);
+  const last = parts[parts.length - 1];
+  return last || trimmed;
+}
+
+/**
+ * Derive a stable 6-digit hex color from a path. Same path always
+ * produces the same color. Luminance clamped so the result is readable
+ * on both light and dark backgrounds.
+ */
+export function colorForPath(p: string): string {
+  const hash = crypto.createHash("sha256").update(p).digest();
   const r = 80 + (hash[0] % 140);
   const g = 80 + (hash[7] % 140);
   const b = 80 + (hash[15] % 140);
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
-function validateName(name: string): void {
-  if (typeof name !== "string" || !NAME_RE.test(name)) {
-    throw new BackpackRegistryError(
-      `invalid backpack name "${name}": must match /^[a-z0-9][a-z0-9_-]{0,31}$/`,
-      "INVALID_NAME",
-    );
+/**
+ * Given a path and the full ordered list of paths, return the display
+ * name that should be used for it. Special-cases the default personal
+ * path to `personal`. On collision (two paths ending in the same
+ * segment), appends a disambiguating suffix in registration order.
+ */
+export function deriveName(p: string, allPaths: string[]): string {
+  const defaultPersonal = path.resolve(defaultPersonalPath());
+
+  if (path.resolve(p) === defaultPersonal) {
+    return DEFAULT_PERSONAL_NAME;
   }
+  const base = basename(p);
+
+  // Count how many earlier paths would display with the same base name.
+  // The default personal path is included in the count when the base is
+  // `personal` — otherwise a user registering another `/whatever/personal`
+  // path would silently collide with the special-cased default.
+  let priorCount = 0;
+  for (const other of allPaths) {
+    if (other === p) break;
+    const otherBase =
+      path.resolve(other) === defaultPersonal
+        ? DEFAULT_PERSONAL_NAME
+        : basename(other);
+    if (otherBase === base) priorCount++;
+  }
+  return priorCount === 0 ? base : `${base}-${priorCount + 1}`;
 }
 
+/**
+ * Expand a leading `~/` to the user's home directory. Does NOT do any
+ * other shell-like expansion (no `$VARS`, no globs).
+ */
 function expandHome(p: string): string {
-  if (p.startsWith("~/") || p === "~") {
-    return path.join(os.homedir(), p.slice(1));
+  if (p === "~") return os.homedir();
+  if (p.startsWith("~/") || p.startsWith("~\\")) {
+    return path.join(os.homedir(), p.slice(2));
   }
   return p;
 }
 
+/** Normalize a user-provided path for storage: tilde-expand and resolve absolute. */
 function normalizePath(p: string): string {
-  const expanded = expandHome(p);
-  return path.resolve(expanded);
+  return path.resolve(expandHome(p));
 }
 
 // --- File paths ---
@@ -108,11 +175,11 @@ function backpacksConfigFile(): string {
   return path.join(configDir(), "backpacks.json");
 }
 
-function activeConfigFile(): string {
+function legacyActiveFile(): string {
   return path.join(configDir(), "active.json");
 }
 
-// --- IO ---
+// --- IO helpers ---
 
 async function readJsonOrNull<T>(p: string): Promise<T | null> {
   try {
@@ -131,191 +198,228 @@ async function writeJsonAtomic(p: string, data: unknown): Promise<void> {
   await fs.rename(tmp, p);
 }
 
-// --- Seed defaults ---
+// --- Migration ---
 
 /**
- * Compute the default path for the "personal" backpack on first run.
- * Honors BACKPACK_DIR and XDG_DATA_HOME so users upgrading from 0.3.x
- * with a custom data directory keep their graphs.
+ * Convert a v1 file in memory to v2 shape, reading the separate
+ * legacy active.json to find the active entry. If the legacy active
+ * file is missing or points at an unknown name, default to the first
+ * path.
  */
-function defaultPersonalPath(): string {
-  return path.join(dataDir(), "graphs");
-}
-
-function defaultPersonalEntry(): BackpackEntry {
-  return {
-    name: DEFAULT_NAME,
-    path: defaultPersonalPath(),
-    color: colorForName(DEFAULT_NAME),
-  };
+async function migrateV1ToV2(v1: LegacyBackpacksFileV1): Promise<BackpacksConfigFile> {
+  const paths = v1.backpacks.map((b) => normalizePath(b.path));
+  let active = paths[0] ?? "";
+  const legacyActive = await readJsonOrNull<LegacyActiveFileV1>(legacyActiveFile());
+  if (legacyActive && typeof legacyActive.name === "string") {
+    const match = v1.backpacks.find((b) => b.name === legacyActive.name);
+    if (match) active = normalizePath(match.path);
+  }
+  return { version: CONFIG_VERSION, paths, active };
 }
 
 // --- Public API ---
 
 /**
- * Load the registry, seeding the default "personal" entry if the file
- * does not yet exist. Also seeds active.json to "personal" on first run.
+ * Load the registry, seeding with the default personal path if the file
+ * doesn't exist, and auto-migrating from v1 format if it does. Always
+ * returns a well-formed v2 config. Safe to call many times.
  */
 export async function loadRegistry(): Promise<BackpacksConfigFile> {
-  const existing = await readJsonOrNull<BackpacksConfigFile>(backpacksConfigFile());
-  if (existing && Array.isArray(existing.backpacks)) return existing;
+  const raw = await readJsonOrNull<unknown>(backpacksConfigFile());
 
+  if (raw === null) {
+    // First run: seed with the personal default
+    const seeded: BackpacksConfigFile = {
+      version: CONFIG_VERSION,
+      paths: [defaultPersonalPath()],
+      active: defaultPersonalPath(),
+    };
+    await writeJsonAtomic(backpacksConfigFile(), seeded);
+    return seeded;
+  }
+
+  if (
+    typeof raw === "object" &&
+    raw !== null &&
+    "paths" in raw &&
+    Array.isArray((raw as BackpacksConfigFile).paths)
+  ) {
+    // Already v2
+    const cfg = raw as BackpacksConfigFile;
+    // Defensive: ensure `active` is one of the paths, else pick the first
+    if (!cfg.paths.includes(cfg.active)) {
+      cfg.active = cfg.paths[0] ?? defaultPersonalPath();
+    }
+    return {
+      version: CONFIG_VERSION,
+      paths: cfg.paths.slice(),
+      active: cfg.active,
+    };
+  }
+
+  if (
+    typeof raw === "object" &&
+    raw !== null &&
+    "backpacks" in raw &&
+    Array.isArray((raw as LegacyBackpacksFileV1).backpacks)
+  ) {
+    // v1 format — migrate, write the v2 file, and remove the legacy
+    // active.json file to keep the config directory tidy.
+    const migrated = await migrateV1ToV2(raw as LegacyBackpacksFileV1);
+    await writeJsonAtomic(backpacksConfigFile(), migrated);
+    await fs.rm(legacyActiveFile()).catch(() => {});
+    return migrated;
+  }
+
+  // Garbage — treat as first run
   const seeded: BackpacksConfigFile = {
     version: CONFIG_VERSION,
-    backpacks: [defaultPersonalEntry()],
+    paths: [defaultPersonalPath()],
+    active: defaultPersonalPath(),
   };
   await writeJsonAtomic(backpacksConfigFile(), seeded);
-  // Seed active too, but only if missing (don't clobber)
-  const activeExists = (await readJsonOrNull<ActiveConfigFile>(activeConfigFile())) !== null;
-  if (!activeExists) {
-    await writeJsonAtomic(activeConfigFile(), {
-      version: CONFIG_VERSION,
-      name: DEFAULT_NAME,
-    });
-  }
   return seeded;
 }
 
+/** List all registered backpacks as derived entries. */
 export async function listBackpacks(): Promise<BackpackEntry[]> {
-  const registry = await loadRegistry();
-  return registry.backpacks;
-}
-
-export async function getBackpack(name: string): Promise<BackpackEntry | null> {
-  const registry = await loadRegistry();
-  return registry.backpacks.find((b) => b.name === name) ?? null;
+  const cfg = await loadRegistry();
+  return cfg.paths.map((p) => ({
+    path: p,
+    name: deriveName(p, cfg.paths),
+    color: colorForPath(p),
+  }));
 }
 
 /**
- * Register a new backpack. Fails if the name is invalid, the name is
- * already taken, or the path is unusable. The path is normalized
- * (tilde-expanded, resolved to absolute) before storage.
+ * Look up a backpack by either its absolute path or its derived name.
+ * Returns null if no match. Name lookup is case-sensitive.
  */
-export async function registerBackpack(
-  name: string,
-  rawPath: string,
-): Promise<BackpackEntry> {
-  validateName(name);
-  const registry = await loadRegistry();
-  if (registry.backpacks.some((b) => b.name === name)) {
-    throw new BackpackRegistryError(
-      `backpack "${name}" is already registered`,
-      "DUPLICATE_NAME",
-    );
+export async function getBackpack(pathOrName: string): Promise<BackpackEntry | null> {
+  const entries = await listBackpacks();
+  // Try exact path match first (after normalization)
+  const resolved = normalizePath(pathOrName);
+  const byPath = entries.find((e) => e.path === resolved);
+  if (byPath) return byPath;
+  // Try derived name match
+  const byName = entries.find((e) => e.name === pathOrName);
+  return byName ?? null;
+}
+
+/**
+ * Register a new backpack at the given path. Creates the directory
+ * if missing. Idempotent: if the path is already registered, returns
+ * the existing entry without duplicating.
+ */
+export async function registerBackpack(rawPath: string): Promise<BackpackEntry> {
+  const resolved = normalizePath(rawPath);
+  const cfg = await loadRegistry();
+
+  // Idempotent
+  if (cfg.paths.includes(resolved)) {
+    const entry = (await listBackpacks()).find((e) => e.path === resolved);
+    if (entry) return entry;
   }
 
-  const resolvedPath = normalizePath(rawPath);
-
-  // Ensure the directory exists and is writable. If it doesn't exist,
-  // try to create it — a common case for "register a new share before
-  // putting anything in it."
+  // Make sure the directory is usable
   try {
-    await fs.mkdir(resolvedPath, { recursive: true });
+    await fs.mkdir(resolved, { recursive: true });
   } catch (err) {
     throw new BackpackRegistryError(
-      `cannot create or access path "${resolvedPath}": ${(err as Error).message}`,
+      `cannot create or access path "${resolved}": ${(err as Error).message}`,
       "PATH_UNUSABLE",
     );
   }
 
-  const entry: BackpackEntry = {
-    name,
-    path: resolvedPath,
-    color: colorForName(name),
+  cfg.paths.push(resolved);
+  await writeJsonAtomic(backpacksConfigFile(), cfg);
+
+  const all = cfg.paths;
+  return {
+    path: resolved,
+    name: deriveName(resolved, all),
+    color: colorForPath(resolved),
   };
-  registry.backpacks.push(entry);
-  await writeJsonAtomic(backpacksConfigFile(), registry);
-  return entry;
 }
 
 /**
- * Unregister a backpack. Does not delete its data. Refuses to remove
- * the last remaining backpack (there must always be at least one).
- * If the removed backpack was active, falls back to the first remaining.
+ * Unregister a backpack by path or derived name. Does NOT delete its
+ * data. Refuses to unregister the last remaining backpack. If the
+ * removed backpack was active, the first remaining becomes active.
  */
-export async function unregisterBackpack(name: string): Promise<void> {
-  validateName(name);
-  const registry = await loadRegistry();
-  const idx = registry.backpacks.findIndex((b) => b.name === name);
-  if (idx === -1) {
+export async function unregisterBackpack(pathOrName: string): Promise<void> {
+  const cfg = await loadRegistry();
+  const entry = await getBackpack(pathOrName);
+  if (!entry) {
     throw new BackpackRegistryError(
-      `backpack "${name}" is not registered`,
+      `backpack "${pathOrName}" is not registered`,
       "NOT_FOUND",
     );
   }
-  if (registry.backpacks.length <= 1) {
+  if (cfg.paths.length <= 1) {
     throw new BackpackRegistryError(
       `cannot unregister the last remaining backpack`,
       "LAST_BACKPACK",
     );
   }
-  registry.backpacks.splice(idx, 1);
-  await writeJsonAtomic(backpacksConfigFile(), registry);
-
-  // If this was the active one, switch to the first remaining
-  const active = await readJsonOrNull<ActiveConfigFile>(activeConfigFile());
-  if (active && active.name === name) {
-    await writeJsonAtomic(activeConfigFile(), {
-      version: CONFIG_VERSION,
-      name: registry.backpacks[0].name,
-    });
+  cfg.paths = cfg.paths.filter((p) => p !== entry.path);
+  if (cfg.active === entry.path) {
+    cfg.active = cfg.paths[0];
   }
+  await writeJsonAtomic(backpacksConfigFile(), cfg);
 }
 
 /**
- * Return the name of the currently-active backpack. Resolution order:
- *   1. $BACKPACK_ACTIVE env var (if set and resolves to a registered name)
- *   2. name from ~/.config/backpack/active.json
- *   3. first entry in the registry
- *
- * Loads (and seeds) the registry as a side effect, so a fresh install
- * always has something to return.
+ * Return the currently active backpack. Resolution order:
+ *   1. $BACKPACK_ACTIVE env var (accepts path or derived name)
+ *   2. config.active
+ *   3. first entry in the registry (fallback)
  */
 export async function getActiveBackpack(): Promise<BackpackEntry> {
-  const registry = await loadRegistry();
-  if (registry.backpacks.length === 0) {
-    // Shouldn't happen — loadRegistry seeds — but guard anyway.
-    const seed = defaultPersonalEntry();
-    registry.backpacks.push(seed);
-    await writeJsonAtomic(backpacksConfigFile(), registry);
+  const cfg = await loadRegistry();
+  const entries = await listBackpacks();
+  if (entries.length === 0) {
+    // Shouldn't happen — loadRegistry seeds — but guard.
+    const fallback = defaultPersonalPath();
+    cfg.paths.push(fallback);
+    cfg.active = fallback;
+    await writeJsonAtomic(backpacksConfigFile(), cfg);
+    return {
+      path: fallback,
+      name: DEFAULT_PERSONAL_NAME,
+      color: colorForPath(fallback),
+    };
   }
 
-  // 1. Env var override (opt-in per session)
-  const envName = process.env.BACKPACK_ACTIVE;
-  if (envName) {
-    const match = registry.backpacks.find((b) => b.name === envName);
+  // 1. Env var override
+  const envInput = process.env.BACKPACK_ACTIVE;
+  if (envInput) {
+    const match = await getBackpack(envInput);
     if (match) return match;
-    // Env var points at an unknown name — ignore it rather than crash.
   }
 
-  // 2. active.json
-  const active = await readJsonOrNull<ActiveConfigFile>(activeConfigFile());
-  if (active && typeof active.name === "string") {
-    const match = registry.backpacks.find((b) => b.name === active.name);
-    if (match) return match;
-  }
+  // 2. Config active
+  const configMatch = entries.find((e) => e.path === cfg.active);
+  if (configMatch) return configMatch;
 
-  // 3. Fall through to first entry
-  return registry.backpacks[0];
+  // 3. First
+  return entries[0];
 }
 
 /**
- * Persist a new active backpack selection. Rejects unknown names.
- * Does not honor or touch the env var override (that's session-scoped).
+ * Persist a new active backpack. Accepts either a path or a derived
+ * name. Does NOT touch the env var override.
  */
-export async function setActiveBackpack(name: string): Promise<BackpackEntry> {
-  validateName(name);
-  const registry = await loadRegistry();
-  const entry = registry.backpacks.find((b) => b.name === name);
+export async function setActiveBackpack(pathOrName: string): Promise<BackpackEntry> {
+  const cfg = await loadRegistry();
+  const entry = await getBackpack(pathOrName);
   if (!entry) {
     throw new BackpackRegistryError(
-      `backpack "${name}" is not registered`,
+      `backpack "${pathOrName}" is not registered`,
       "NOT_FOUND",
     );
   }
-  await writeJsonAtomic(activeConfigFile(), {
-    version: CONFIG_VERSION,
-    name,
-  });
+  cfg.active = entry.path;
+  await writeJsonAtomic(backpacksConfigFile(), cfg);
   return entry;
 }

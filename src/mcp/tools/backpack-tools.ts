@@ -23,17 +23,12 @@ export function registerBackpackTools(
     {
       title: "Register a Backpack",
       description:
-        "Add a named backpack that points at a graphs directory. Lets the user switch between multiple backpacks (personal, a shared OneDrive folder, a project-specific folder, etc). The path is created if it doesn't exist. Does not switch to the new backpack automatically unless activate=true.",
+        "Add a backpack — a pointer to a graphs directory that lets the user switch between multiple collections of learning graphs (personal, a shared OneDrive folder, a project-specific folder, etc). The display name is derived from the last segment of the path (e.g. '/Users/me/OneDrive/work' shows as 'work'). The path is created if it doesn't exist. Registering an already-registered path is a no-op. Does not switch to the new backpack unless activate=true.",
       inputSchema: {
-        name: z
-          .string()
-          .describe(
-            "Short unique name for this backpack (kebab-case, e.g. 'work', 'family', 'project-alpha')",
-          ),
         path: z
           .string()
           .describe(
-            "Absolute or tilde-expanded path to a directory that will hold learning graphs (e.g. '~/OneDrive/work-backpack')",
+            "Absolute or tilde-expanded path to the directory that will hold learning graphs (e.g. '~/OneDrive/work', '/Users/me/Dropbox/family-backpack', '/Volumes/share/team-backpack')",
           ),
         activate: z
           .boolean()
@@ -43,13 +38,13 @@ export function registerBackpackTools(
           ),
       },
     },
-    async ({ name, path, activate }) => {
+    async ({ path, activate }) => {
       try {
-        const entry = await registerBackpack(name, path);
+        const entry = await registerBackpack(path);
         let switchedTo: string | null = null;
         if (activate) {
-          await backpack.switchBackpack(name);
-          switchedTo = name;
+          await backpack.switchBackpack(entry.path);
+          switchedTo = entry.name;
         }
         trackEvent("tool_call", { tool: "backpack_register" });
         const text =
@@ -73,11 +68,13 @@ export function registerBackpackTools(
     {
       title: "Switch Active Backpack",
       description:
-        "Change which backpack is currently active. All subsequent reads and writes go to the new backpack's graphs directory. The previous backpack's data is untouched and can be switched back to at any time.",
+        "Change which backpack is currently active. All subsequent reads and writes go to the new backpack's graphs directory. The previous backpack's data is untouched and can be switched back to at any time. Accepts either a derived display name (e.g. 'work') or an absolute path.",
       inputSchema: {
         name: z
           .string()
-          .describe("Name of the registered backpack to switch to"),
+          .describe(
+            "Display name OR absolute path of the registered backpack to switch to",
+          ),
       },
     },
     async ({ name }) => {
@@ -174,20 +171,25 @@ export function registerBackpackTools(
     {
       title: "Unregister a Backpack",
       description:
-        "Remove a backpack from the registry. Does NOT delete any data — the graphs directory at the backpack's path is left alone. Refuses to unregister the last remaining backpack. If the removed backpack was active, the first remaining backpack becomes active automatically.",
+        "Remove a backpack from the registry. Does NOT delete any data — the graphs directory at the backpack's path is left alone. Refuses to unregister the last remaining backpack. If the removed backpack was active, the first remaining backpack becomes active automatically. Accepts either a display name or an absolute path.",
       inputSchema: {
-        name: z.string().describe("Name of the backpack to unregister"),
+        name: z
+          .string()
+          .describe("Display name OR absolute path of the backpack to unregister"),
       },
     },
     async ({ name }) => {
       try {
-        await unregisterBackpack(name);
-        // If we just unregistered the active one, the registry switched
-        // for us — sync the Backpack instance with the new active state.
         const current = backpack.getActiveBackpackEntry();
-        if (current && current.name === name) {
+        const wasActive =
+          current &&
+          (current.name === name || current.path === name);
+        await unregisterBackpack(name);
+        if (wasActive) {
+          // Registry auto-switched to the first remaining — sync the
+          // Backpack instance to match.
           const nowActive = await getActiveBackpack();
-          await backpack.switchBackpack(nowActive.name);
+          await backpack.switchBackpack(nowActive.path);
         }
         trackEvent("tool_call", { tool: "backpack_unregister" });
         return {

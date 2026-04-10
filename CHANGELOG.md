@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.5.0 (2026-04-10)
+
+**Breaking change to the backpacks registry config format.** Zero-touch
+auto-migration from 0.4.0 on first load — users who just installed 0.4.0
+and hand-registered backpacks will see their paths carried forward
+automatically. No manual steps.
+
+### Simpler backpacks config
+- Old format (v1): `{ version: 1, backpacks: [{ name, path, color }] }`
+  plus a separate `active.json` file.
+- New format (v2): `{ version: 2, paths: [...], active: "path" }` in
+  a single file at `~/.config/backpack/backpacks.json`. Display names
+  and colors are no longer stored — they're derived from the path on
+  every read.
+- **Name derivation:** last path segment becomes the display name.
+  `/Users/me/OneDrive/work` → `work`. The default personal graphs
+  directory is special-cased to show as `personal`. Collisions get
+  `-2`, `-3` suffixes in registration order.
+- **Color derivation:** stable hash of the path string. Same path
+  always gets the same color.
+- The file is easier to hand-edit — it's literally just a list of
+  paths plus an active pointer.
+
+### Simpler MCP tool signatures
+- **`backpack_register`** drops the `name` parameter. Takes only
+  `path` (and optional `activate: true`). The display name is
+  derived from the path; no manual naming required.
+- **`backpack_switch`** and **`backpack_unregister`** now accept
+  either the derived display name OR the absolute path.
+- **`BACKPACK_ACTIVE`** env var also accepts either a name or a path.
+
+### Auto-migration
+- On first load after upgrade, the registry detects the v1 format and
+  rewrites it as v2 in place. The old separate `active.json` file is
+  read for the active name and then removed. No data loss, no manual
+  intervention, no change to graphs or events.
+- Migration runs once; subsequent loads see the v2 format and skip.
+- Garbage or corrupted config files are replaced with a fresh seeded
+  registry (same behavior as first run).
+
+### Public API changes
+- `BackpackEntry` shape unchanged — `{ path, name, color }` — but
+  `name` and `color` are now computed on the fly from `path`, not
+  stored.
+- `colorForName(name)` removed; replaced by **`colorForPath(path)`**.
+- New export: **`deriveName(path, allPaths)`** — pure function that
+  returns the display name a given path would show as in the context
+  of the full registry (handles the personal special case and
+  collision suffixes).
+- `registerBackpack(name, path)` → **`registerBackpack(path)`**
+  (breaking signature change).
+- `unregisterBackpack(name)` → **`unregisterBackpack(pathOrName)`**
+  (accepts either; backward-compatible for callers who pass the name).
+- `setActiveBackpack(name)` → **`setActiveBackpack(pathOrName)`**
+  (same).
+- `getBackpack(name)` → **`getBackpack(pathOrName)`**.
+
+### Tests
+- Registry test suite rewritten for the new format. 38 tests covering
+  derivation, collision suffixes, seeding, registration idempotency,
+  path vs name lookup, env var override by path AND name, tilde
+  expansion, v1 → v2 migration with and without legacy active.json,
+  garbage file handling, Backpack class switching by name and path.
+- Total: **350 tests passing** (up from 337).
+
 ## 0.4.0 (2026-04-10)
 
 This release adds **multiple backpacks** — a meta-layer on top of
