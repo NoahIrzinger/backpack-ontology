@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.6.0 (2026-04-11)
+
+### Extraction processors + quality pipeline
+- **New `ProcessorPipeline`** (`src/core/processor-pipeline.ts`) runs extraction proposals through a stack of validators before they're persisted. Each processor returns typed `ProcessorIssue`s with severity, target, and recommendation.
+- **Four bundled processors** in `src/core/processors/`:
+  - `VaguenessFilter` — flags vague labels, vague properties, and generic edge types.
+  - `DuplicateDetector` — catches proposed nodes that collide with existing graph entries.
+  - `RelationshipThreshold` — scores proposed edges against a semantic/property/source rubric and rejects weak ones.
+  - `RoleAuditValidator` — reuses `auditRoles()` to flag procedural (belongs in a Skill) and briefing (belongs in CLAUDE.md) content.
+- **New `ProcessorIssue.kind`**: `"briefing_content"` added so briefing candidates are distinguishable from procedural ones in reports.
+
+### New MCP intelligence tools
+- `backpack_validate_extraction` — dry-run proposed nodes/edges through the processor pipeline before import, so callers can surface issues without touching the graph.
+- `backpack_analyze_patterns` — frequency, dependency, and cost-driver detection across a graph.
+- `backpack_synthesize_structured` — machine-readable synthesis output with degree stats, label extraction, and connection summaries.
+- `backpack_priority_briefing` — ranked action surface for the most load-bearing nodes/edges in a graph.
+- `backpack_discovery_audit` — coverage-gap analysis with next-step hints tied to expected source types.
+
+### Telemetry
+- Intelligence tools now record `responseTokens` so the tool token stats reflect actual output cost, not just input.
+- New `toolTokenStats` aggregation exposed via telemetry internals.
+
+### Draft warnings
+- Draft phase now emits `missing_summary` and `summary_too_long` warnings so drafts can be iterated before being committed as real nodes.
+
+### Recommendation formatter
+- New `src/core/recommendation-formatter.ts` turns pipeline issues into user-facing recommendations with effort hints.
+
 ## 0.5.2 (2026-04-10)
 
 ### Friendly default author names (no more "unknown")
