@@ -12,14 +12,29 @@
 
 import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { configDir } from "./paths.js";
 import type { Backpack } from "./backpack.js";
 
 const ENDPOINT =
   process.env.BACKPACK_TELEMETRY_URL ?? "https://diagnostics.backpackontology.com/api/telemetry";
-const VERSION = "0.2.14";
+
+// Read version from package.json at module load. The built file lives at
+// dist/core/telemetry.js, so ../../package.json resolves to the package root.
+// Fall back to "unknown" if the file can't be read (e.g. bundled build).
+function resolveVersion(): string {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const pkgPath = path.join(here, "..", "..", "package.json");
+    return JSON.parse(readFileSync(pkgPath, "utf-8")).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+const VERSION = resolveVersion();
 
 interface TelemetryEvent {
   event: string;

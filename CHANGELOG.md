@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 (2026-04-11)
+
+### Telemetry fixes
+- **Hardcoded version reporting.** `telemetry.ts` shipped with `const VERSION = "0.2.14"` and was never updated. Every release since 0.2.14 reported itself as 0.2.14 in telemetry events, silently corrupting the version distribution view in backpack-diagnostics. The version is now resolved at module load by reading `package.json` from the package root, with a `"unknown"` fallback for bundled scenarios.
+- **Session-level token stats undercount.** `formatSavingsFooter()` only called `trackTokenSavings()` when `saved > 0`, so `tokenStats.readCount` and the cumulative totals (`totalGraphTokens`, `totalResponseTokens`) missed every read where savings were zero or negative. Tracking now fires unconditionally; the footer string itself is still only emitted when savings are positive, so user-visible output is unchanged.
+
 ## 0.6.0 (2026-04-11)
 
 ### Extraction processors + quality pipeline

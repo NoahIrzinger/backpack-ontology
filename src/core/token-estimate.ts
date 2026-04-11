@@ -25,13 +25,18 @@ export function computeSavings(
   return { saved, percent };
 }
 
-/** Format a one-line savings footer for MCP tool responses. Also tracks in telemetry. */
+/** Format a one-line savings footer for MCP tool responses. Also tracks in telemetry.
+ *
+ * Tracking always fires so session-level `tokenStats.readCount` and cumulative
+ * token totals reflect every read, not just ones with positive savings. The
+ * returned footer string is only non-empty when there's actual savings to show
+ * the user. */
 export function formatSavingsFooter(
   graphTokens: number,
   responseTokens: number
 ): string {
+  trackTokenSavings(graphTokens, responseTokens);
   const { saved, percent } = computeSavings(graphTokens, responseTokens);
   if (saved <= 0) return "";
-  trackTokenSavings(graphTokens, responseTokens);
   return `📊 Backpack served ~${responseTokens.toLocaleString()} tokens instead of ~${graphTokens.toLocaleString()} (${percent}% reduction vs. full graph)`;
 }
