@@ -180,7 +180,7 @@ export function registerNodeTools(
     {
       title: "Add Node",
       description:
-        "Add a new item to a learning graph in the backpack. The type is freeform — use whatever makes sense for the domain. Properties are key-value pairs.",
+        "Add a new item to a learning graph in the backpack. The type is freeform — use whatever makes sense for the domain. Properties are key-value pairs. Optional source metadata automatically attaches a pointer back to the original data.",
       inputSchema: {
         ontology: z.string().describe("Name of the learning graph"),
         type: z
@@ -193,15 +193,38 @@ export function registerNodeTools(
           .describe(
             "Key-value pairs for this node (e.g. { name: 'garlic', category: 'aromatic' })"
           ),
+        source: z
+          .string()
+          .optional()
+          .describe(
+            "Pointer to original data (URL, file path, system:resource). E.g., 'https://example.com/team', 'email:outlook/thread-123', 'jira:project/ISSUE-42'"
+          ),
+        sourceType: z
+          .string()
+          .optional()
+          .describe(
+            "System that owns this data (e.g. 'web', 'email', 'jira', 'slack', 'document')"
+          ),
+        sourceReference: z
+          .string()
+          .optional()
+          .describe(
+            "Human-readable context from the source (e.g. 'Team page', 'Subject: Q2 planning', 'ISSUE-42: Pricing')"
+          ),
       },
     },
-    async ({ ontology, type, properties }) => {
+    async ({ ontology, type, properties, source, sourceType, sourceReference }) => {
       try {
-        const node = await backpack.addNode(
-          ontology,
-          type,
-          properties as Record<string, unknown>
-        );
+        const props = properties as Record<string, unknown>;
+        // Automatically attach source metadata if provided
+        if (source) {
+          props.source = source;
+          if (sourceType) props.source_type = sourceType;
+          if (sourceReference) props.source_reference = sourceReference;
+          // Add ISO timestamp for source_date
+          props.source_date = new Date().toISOString();
+        }
+        const node = await backpack.addNode(ontology, type, props);
         trackEvent("tool_call", { tool: "backpack_add_node" });
         const terms = await backpack.getTermsContext(ontology);
         const content: { type: "text"; text: string }[] = [

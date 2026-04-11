@@ -24,6 +24,24 @@ export function registerBulkTools(
               properties: z
                 .record(z.string(), z.unknown())
                 .describe("Key-value pairs for the node"),
+              source: z
+                .string()
+                .optional()
+                .describe(
+                  "Optional pointer to original data (URL, file path, system:resource). Automatically attached as source metadata."
+                ),
+              sourceType: z
+                .string()
+                .optional()
+                .describe(
+                  "Optional system that owns this data (e.g. 'web', 'email', 'jira', 'slack', 'document')"
+                ),
+              sourceReference: z
+                .string()
+                .optional()
+                .describe(
+                  "Optional human-readable context from the source (e.g. 'Team page', 'Subject: Q2 planning')"
+                ),
             })
           )
           .describe("Array of nodes to import"),
@@ -47,6 +65,12 @@ export function registerBulkTools(
                 .record(z.string(), z.unknown())
                 .optional()
                 .describe("Optional key-value pairs for this edge"),
+              sourcePointer: z
+                .string()
+                .optional()
+                .describe(
+                  "Optional pointer to original data source for this relationship"
+                ),
             })
           )
           .optional()
@@ -63,24 +87,49 @@ export function registerBulkTools(
     },
     async ({ ontology, nodes, edges, dryRun }) => {
       try {
-        const proposedNodes = nodes as Array<{
+        // Attach source metadata to nodes if provided
+        const proposedNodes = (nodes as Array<{
           type: string;
           properties: Record<string, unknown>;
-        }>;
+          source?: string;
+          sourceType?: string;
+          sourceReference?: string;
+        }>).map((node) => {
+          const props = { ...node.properties };
+          if (node.source) {
+            props.source = node.source;
+            if (node.sourceType) props.source_type = node.sourceType;
+            if (node.sourceReference) props.source_reference = node.sourceReference;
+            // Add ISO timestamp for source_date
+            props.source_date = new Date().toISOString();
+          }
+          return { type: node.type, properties: props };
+        });
+
         const proposedEdges = edges as
           | Array<{
               type: string;
               source: number | string;
               target: number | string;
               properties?: Record<string, unknown>;
+              sourcePointer?: string;
             }>
           | undefined;
+
+        // Attach source metadata to edges if provided
+        const edgesWithSource = proposedEdges?.map((edge) => {
+          const props = { ...edge.properties };
+          if (edge.sourcePointer) {
+            props.source = edge.sourcePointer;
+          }
+          return { ...edge, properties: props };
+        });
 
         // Always validate the batch before any write
         const validation = await backpack.validateImport(
           ontology,
           proposedNodes,
-          proposedEdges ?? [],
+          edgesWithSource ?? [],
         );
 
         // Errors block the commit regardless of dryRun
@@ -128,7 +177,7 @@ export function registerBulkTools(
         const result = await backpack.importNodes(
           ontology,
           proposedNodes,
-          proposedEdges,
+          edgesWithSource,
         );
         trackEvent("tool_call", { tool: "backpack_import_nodes" });
         const terms = await backpack.getTermsContext(ontology);

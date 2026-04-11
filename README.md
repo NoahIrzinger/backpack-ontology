@@ -255,6 +255,44 @@ npx -p backpack-ontology@latest backpack-benchmark
 
 Across sessions, the real value is that the graph exists at all. It's built once and queried forever — every future conversation uses structured lookups instead of re-explaining context from scratch.
 
+## Source metadata (automatic)
+
+Every node extracted from an external source — email, JIRA, web page, document — automatically carries metadata that points back to where it came from. This enables traceability and staleness detection.
+
+When Claude mines or extracts data, it attaches four properties to every node:
+
+```json
+{
+  "id": "n_vendor_abc",
+  "type": "Vendor",
+  "properties": {
+    "name": "ABC Maintenance",
+    
+    // Automatic source metadata
+    "source": "email:outlook/thread-xyz789",
+    "source_type": "email",
+    "source_date": "2026-04-10T14:22:00Z",
+    "source_reference": "Subject: Vendor consolidation plan"
+  }
+}
+```
+
+| Field | What it is | Example |
+|---|---|---|
+| `source` | Pointer to original data | `https://example.com/team`, `email:outlook/thread-123`, `jira:myproject/ISSUE-42` |
+| `source_type` | System that owns this data | `web`, `email`, `jira`, `slack`, `document` |
+| `source_date` | When the data was created/modified | ISO 8601 timestamp |
+| `source_reference` | Human-readable context | `"Team page"`, `"Subject: Q2 planning"`, `"ISSUE-42: Pricing"` |
+
+**Why this matters:**
+
+- **Traceability** — You (or Claude) can always click back to the original source
+- **Staleness detection** — Queries can see how fresh extracted data is and when to re-fetch
+- **No lock-in** — Source pointers mean Backpack is an index layer, not a data warehouse. Original data stays where it is.
+- **Trust** — You can show exactly where insights and recommendations come from
+
+Claude always adds this metadata automatically. You never need to think about it — just let your AI mine data naturally.
+
 ## Data and privacy
 
 **Backpack Local**: your data is stored at `~/.local/share/backpack/graphs/<graph-name>/` as an append-only event log per branch (`branches/<branch>/events.jsonl`) plus a materialized snapshot cache (`branches/<branch>/snapshot.json`). Both are human-readable, backupable, and version-controlable. Graphs from earlier versions are migrated to this format automatically on first start — nothing to do.
