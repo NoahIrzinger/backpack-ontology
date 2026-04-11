@@ -31,11 +31,19 @@ interface TelemetryEvent {
 
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
+interface ToolTokenEntry {
+  calls: number;
+  totalResponseTokens: number;
+  totalGraphTokens: number;
+  totalSaved: number;
+}
+
 // Module-level state
 const sessionId = crypto.randomUUID();
 const sessionStartTime = Date.now();
 let machineId: string | null = null;
 let toolCalls: Record<string, number> = {};
+let toolTokenStats: Record<string, ToolTokenEntry> = {};
 let tokenStats = { totalGraphTokens: 0, totalResponseTokens: 0, totalSaved: 0, readCount: 0 };
 let disabled: boolean | null = null;
 let backpackRef: Backpack | null = null;
@@ -172,6 +180,7 @@ async function buildSnapshot(event: string): Promise<TelemetryEvent> {
       branchCount,
       snapshotCount,
       tokenStats,
+      toolTokenStats,
       nodeVersion: process.version,
       os: os.platform(),
       arch: os.arch(),
@@ -212,7 +221,12 @@ export async function initTelemetry(backpack?: Backpack): Promise<void> {
   }
 }
 
-/** Track a tool call. Synchronous — never throws, never blocks. */
+/** Track a tool call. Synchronous — never throws, never blocks.
+ *
+ * Optional token fields — include when available:
+ *   graphTokens:    size of the graph that was read (from backpack.getGraphTokens)
+ *   responseTokens: estimated size of the tool response (from estimateTokens)
+ */
 export function trackEvent(
   event: string,
   properties: Record<string, unknown> = {}
@@ -222,6 +236,18 @@ export function trackEvent(
     if (event === "tool_call") {
       const tool = (properties.tool as string) ?? "unknown";
       toolCalls[tool] = (toolCalls[tool] ?? 0) + 1;
+
+      const graphTokens = typeof properties.graphTokens === "number" ? properties.graphTokens : 0;
+      const responseTokens = typeof properties.responseTokens === "number" ? properties.responseTokens : 0;
+
+      if (graphTokens > 0 || responseTokens > 0) {
+        const entry = toolTokenStats[tool] ?? { calls: 0, totalResponseTokens: 0, totalGraphTokens: 0, totalSaved: 0 };
+        entry.calls++;
+        entry.totalResponseTokens += responseTokens;
+        entry.totalGraphTokens += graphTokens;
+        entry.totalSaved += Math.max(0, graphTokens - responseTokens);
+        toolTokenStats[tool] = entry;
+      }
     }
     // Individual events are no longer sent — aggregated at shutdown
   } catch {

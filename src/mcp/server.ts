@@ -6,7 +6,7 @@ import { JsonFileBackend } from "../storage/json-file-backend.js";
 import { BackpackAppBackend } from "../storage/backpack-app-backend.js";
 import { OAuthClient } from "../auth/oauth.js";
 import { initTelemetry } from "../core/telemetry.js";
-import { registerOntologyTools } from "./tools/ontology-tools.js";
+import { registerOntologyTools, registerDiscoveryAuditTool } from "./tools/ontology-tools.js";
 import { registerNodeTools } from "./tools/node-tools.js";
 import { registerEdgeTools } from "./tools/edge-tools.js";
 import { registerBulkTools } from "./tools/bulk-tools.js";
@@ -119,6 +119,7 @@ Be selective — not every conversation needs to be captured. Focus on knowledge
 
   // Register all tool groups
   registerOntologyTools(server, backpack);
+  registerDiscoveryAuditTool(server);
   registerNodeTools(server, backpack);
   registerEdgeTools(server, backpack);
   registerBulkTools(server, backpack);

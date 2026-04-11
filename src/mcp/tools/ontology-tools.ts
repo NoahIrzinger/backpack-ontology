@@ -4,6 +4,73 @@ import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
 import { estimateTokens, formatSavingsFooter } from "../../core/token-estimate.js";
 import { formatWriteError } from "./error-helpers.js";
+import { auditDiscovery, HOSPITALITY_CATEGORIES } from "../../core/discovery-audit.js";
+import type { DiscoveredSource, SourceType } from "../../core/discovery-audit.js";
+
+// backpack_discovery_audit is registered separately since it's stateless
+// (no graph read needed). Exported so it can be registered by the server.
+export function registerDiscoveryAuditTool(server: McpServer): void {
+  server.registerTool(
+    "backpack_discovery_audit",
+    {
+      title: "Discovery Audit",
+      description:
+        "Check how completely you've covered a client's data landscape during the discovery phase. Maps your declared sources against 7 universal categories (Communications, Operations, Financial, People/Org, Systems, External, Historical) and returns coverage scores, critical gaps, and next-step recommendations. Pass vertical='hospitality' to add domain-specific categories.",
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        sources: z
+          .array(
+            z.object({
+              name: z.string().describe("Name or description of the source"),
+              category: z
+                .string()
+                .describe(
+                  "Category this source belongs to (e.g. 'email', 'financial', 'operations')"
+                ),
+              type: z
+                .enum([
+                  "email",
+                  "document",
+                  "api",
+                  "system",
+                  "interview",
+                  "spreadsheet",
+                  "database",
+                  "chat",
+                  "ticket",
+                  "other",
+                ])
+                .describe("Type of source"),
+            })
+          )
+          .describe("Sources discovered so far"),
+        vertical: z
+          .enum(["hospitality"])
+          .optional()
+          .describe(
+            "Optional vertical to add domain-specific categories (e.g. Pricing & Revenue, Property & Maintenance for hospitality)"
+          ),
+      },
+    },
+    async ({ sources, vertical }) => {
+      const additionalCategories =
+        vertical === "hospitality" ? HOSPITALITY_CATEGORIES : [];
+      const audit = auditDiscovery(
+        sources as DiscoveredSource[],
+        additionalCategories,
+      );
+      trackEvent("tool_call", { tool: "backpack_discovery_audit" });
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(audit, null, 2),
+          },
+        ],
+      };
+    }
+  );
+}
 
 export function registerOntologyTools(
   server: McpServer,
@@ -238,23 +305,51 @@ export function registerOntologyTools(
           .describe(
             "Defaults to true (preview only). Set to false explicitly to apply the renames.",
           ),
+        autoApply: z
+          .boolean()
+          .optional()
+          .describe(
+            "If true, automatically apply normalization when the plan affects fewer than 5 nodes/edges total (safe micro-fixes). Larger plans are returned for review regardless.",
+          ),
       },
     },
-    async ({ ontology, dryRun }) => {
+    async ({ ontology, dryRun, autoApply }) => {
       // Default to dry-run if not specified — no surprising writes
       const doDryRun = dryRun !== false;
       try {
-        if (doDryRun) {
+        if (doDryRun || autoApply) {
           const plan = await backpack.planNormalization(ontology);
-          trackEvent("tool_call", {
-            tool: "backpack_normalize",
-            outcome: "dry_run",
-          });
           const totalNode = plan.nodeTypeRenames.reduce((s, r) => s + r.count, 0);
           const totalEdge = plan.edgeTypeRenames.reduce((s, r) => s + r.count, 0);
+          const totalAffected = totalNode + totalEdge;
           const empty =
             plan.nodeTypeRenames.length === 0 &&
             plan.edgeTypeRenames.length === 0;
+
+          // Auto-apply: if small plan and caller requested it, commit immediately
+          if (autoApply && !empty && totalAffected < 5) {
+            const { plan: applied, summary } = await backpack.applyNormalization(ontology);
+            trackEvent("tool_call", { tool: "backpack_normalize", outcome: "auto_applied" });
+            return {
+              content: [{
+                type: "text" as const,
+                text: `Auto-normalization applied (${totalAffected} item(s) — below threshold).\n${summary.nodeRenameCount} node type rename(s) affecting ${summary.totalAffectedNodes} node(s).\n${summary.edgeRenameCount} edge type rename(s) affecting ${summary.totalAffectedEdges} edge(s).\n\nPlan:\n${JSON.stringify(applied, null, 2)}`,
+              }],
+            };
+          }
+
+          // Auto-apply but plan is too large — return for review
+          if (autoApply && !empty && totalAffected >= 5) {
+            trackEvent("tool_call", { tool: "backpack_normalize", outcome: "auto_deferred" });
+            return {
+              content: [{
+                type: "text" as const,
+                text: `Auto-normalization deferred: plan affects ${totalAffected} items (threshold is 5). Review and call with dryRun=false to apply.\n\n${JSON.stringify(plan, null, 2)}`,
+              }],
+            };
+          }
+
+          trackEvent("tool_call", { tool: "backpack_normalize", outcome: "dry_run" });
           const text = empty
             ? `No type drift detected. Graph is already normalized.`
             : `Normalization plan (dry run — nothing written):\n${JSON.stringify(plan, null, 2)}\n\n${plan.nodeTypeRenames.length} node type rename(s) affecting ${totalNode} node(s).\n${plan.edgeTypeRenames.length} edge type rename(s) affecting ${totalEdge} edge(s).\n\nCall again without dryRun (or dryRun=false) to apply.`;

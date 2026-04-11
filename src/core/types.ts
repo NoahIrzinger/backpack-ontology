@@ -175,6 +175,116 @@ export interface GraphDegreeTable {
   types: TypeSummary[];
 }
 
+// --- Processor pipeline types ---
+
+export interface ProcessorIssue {
+  kind:
+    | "vague_label"
+    | "generic_edge_type"
+    | "vague_property"
+    | "low_relationship_score"
+    | "procedural_content"
+    | "briefing_content"
+    | "duplicate_node"
+    | "custom";
+  severity: "error" | "warning" | "info";
+  targetId: string; // node or edge identifier (index or id)
+  detectedBy: string; // processor name
+  message: string;
+  recommendation: string;
+}
+
+export interface ProcessorResult {
+  issues: ProcessorIssue[];
+  metadata: {
+    processor: string;
+    confidence?: number;
+    enhancedBy?: string[];
+  };
+}
+
+export interface ProcessorContext {
+  existingNodes: Node[];
+  existingEdges: Edge[];
+}
+
+export interface ExtractionProcessor {
+  name: string;
+  priority: number; // lower runs first
+  canProcessNode(node: ProposedNodeInput): boolean;
+  canProcessEdge(edge: ProposedEdgeInput): boolean;
+  processNode(
+    node: ProposedNodeInput,
+    index: number,
+    context: ProcessorContext
+  ): ProcessorIssue[];
+  processEdge(
+    edge: ProposedEdgeInput,
+    index: number,
+    context: ProcessorContext
+  ): ProcessorIssue[];
+}
+
+export interface ProposedNodeInput {
+  type: string;
+  properties: Record<string, unknown>;
+}
+
+export interface ProposedEdgeInput {
+  type: string;
+  source: number | string;
+  target: number | string;
+  properties?: Record<string, unknown>;
+}
+
+export interface ExtractionQualityReport {
+  ok: boolean; // false if any errors exist
+  issues: ProcessorIssue[];
+  summary: {
+    totalChecked: number;
+    errors: number;
+    warnings: number;
+    processorsRun: string[];
+    recommendedRemovals: string[]; // node indices with errors
+  };
+}
+
+// --- Pattern analysis types ---
+
+export type PatternType =
+  | "frequency"
+  | "dependency"
+  | "cost_driver"
+  | "gap"
+  | "mismatch";
+
+export interface PatternEntity {
+  nodeId: string;
+  label: string;
+  type: string;
+  score: number;
+}
+
+export interface DetectedPattern {
+  id: string;
+  type: PatternType;
+  entities: PatternEntity[];
+  reasoning: string;
+  severity: "critical" | "high" | "medium" | "low";
+  recommendedAction: string;
+}
+
+export interface PatternAnalysis {
+  patterns: DetectedPattern[];
+  topIssues: string[]; // ranked by severity × score
+  summary: {
+    nodesAnalyzed: number;
+    edgesAnalyzed: number;
+    patternsFound: number;
+    byType: Record<PatternType, number>;
+  };
+}
+
 // --- Pluggable storage interface ---
 
 /**

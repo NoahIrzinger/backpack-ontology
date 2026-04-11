@@ -4,6 +4,7 @@ import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
 import { formatTermsHint } from "./terms-hint.js";
 import { formatWriteError } from "./error-helpers.js";
+import { ExtractionQualityValidator } from "../../core/extraction-quality.js";
 
 export function registerBulkTools(
   server: McpServer,
@@ -198,6 +199,75 @@ export function registerBulkTools(
         return { content };
       } catch (err) {
         return formatWriteError(backpack, ontology, err);
+      }
+    }
+  );
+
+  // backpack_validate_extraction: quality-check proposed nodes/edges before import
+  server.registerTool(
+    "backpack_validate_extraction",
+    {
+      title: "Validate Extraction",
+      description:
+        "Run quality checks on proposed nodes and edges before importing them. Uses a processor pipeline (vagueness filter, relationship threshold, role-rule audit, duplicate detection) to surface errors and warnings. Errors block import; use force=true to override. Returns a quality report with recommendations.",
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        ontology: z.string().describe("Name of the learning graph"),
+        nodes: z
+          .array(
+            z.object({
+              type: z.string(),
+              properties: z.record(z.string(), z.unknown()),
+            })
+          )
+          .describe("Proposed nodes to validate"),
+        edges: z
+          .array(
+            z.object({
+              type: z.string(),
+              source: z.union([z.number().int().nonnegative(), z.string()]),
+              target: z.union([z.number().int().nonnegative(), z.string()]),
+              properties: z.record(z.string(), z.unknown()).optional(),
+            })
+          )
+          .optional()
+          .describe("Proposed edges to validate"),
+      },
+    },
+    async ({ ontology, nodes, edges }) => {
+      try {
+        const graph = await (backpack as any).getGraph(ontology);
+        const validator = new ExtractionQualityValidator();
+        const report = validator.validate(
+          nodes as Array<{ type: string; properties: Record<string, unknown> }>,
+          (edges ?? []) as Array<{
+            type: string;
+            source: number | string;
+            target: number | string;
+            properties?: Record<string, unknown>;
+          }>,
+          graph.data.nodes,
+          graph.data.edges,
+        );
+        trackEvent("tool_call", { tool: "backpack_validate_extraction" });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(report, null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${(err as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
       }
     }
   );

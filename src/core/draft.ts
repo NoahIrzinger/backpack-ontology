@@ -34,7 +34,9 @@ export type DraftWarningKind =
   | "type_drift"
   | "duplicate_node"
   | "role_violation_procedural"
-  | "role_violation_briefing";
+  | "role_violation_briefing"
+  | "missing_summary"
+  | "summary_too_long";
 
 export interface DraftWarning {
   kind: DraftWarningKind;
@@ -239,6 +241,38 @@ export function validateProposal(
       message: `node[${idx}] looks briefing-like: ${candidate.reason}`,
       suggestion: candidate.suggestion,
     });
+  }
+
+  // --- Source metadata completeness ---
+  //
+  // When a node declares a source, we strongly encourage a summary too.
+  // Summary must be present (non-empty) and <= 150 chars.
+
+  for (let i = 0; i < proposedNodes.length; i++) {
+    const node = proposedNodes[i];
+    const hasSource =
+      typeof node.properties.source === "string" &&
+      node.properties.source.length > 0;
+    if (!hasSource) continue;
+
+    const summary = node.properties.summary;
+    if (summary === undefined || summary === null || summary === "") {
+      warnings.push({
+        kind: "missing_summary",
+        nodeIndex: i,
+        message: `node[${i}] has a source but no summary property`,
+        suggestion:
+          'Add a summary: 1-2 sentences describing the key fact this node represents (max 150 chars). Example: "Vendor ABC charges $50k/year for HVAC maintenance across all 8 properties."',
+      });
+    } else if (typeof summary === "string" && summary.length > 150) {
+      warnings.push({
+        kind: "summary_too_long",
+        nodeIndex: i,
+        message: `node[${i}] summary is ${summary.length} chars — exceeds 150 char limit`,
+        suggestion:
+          "Trim the summary to 1-2 sentences, max 150 characters. Focus on the single most important fact.",
+      });
+    }
   }
 
   // --- Validate edges ---
