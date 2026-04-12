@@ -21,6 +21,66 @@ export interface RelayConfig {
 }
 
 /**
+ * Sync a BPAK envelope to the relay. The relay stores the latest version.
+ */
+export async function syncToRelay(
+  config: RelayConfig,
+  name: string,
+  envelope: Uint8Array,
+): Promise<void> {
+  const accessToken =
+    typeof config.token === "function"
+      ? await config.token()
+      : config.token;
+
+  const res = await fetch(`${config.url}/api/graphs/${encodeURIComponent(name)}/sync`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: envelope as unknown as BodyInit,
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Relay sync failed (${res.status}): ${body}`);
+  }
+}
+
+/**
+ * Create a share link for a synced graph. Returns the share URL and token.
+ */
+export async function createShareLink(
+  config: RelayConfig,
+  name: string,
+): Promise<{ token: string; url: string; expiresAt?: string }> {
+  const accessToken =
+    typeof config.token === "function"
+      ? await config.token()
+      : config.token;
+
+  const res = await fetch(`${config.url}/api/graphs/${encodeURIComponent(name)}/share`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Relay share failed (${res.status}): ${body}`);
+  }
+
+  return (await res.json()) as {
+    token: string;
+    url: string;
+    expiresAt?: string;
+  };
+}
+
+/**
+ * @deprecated Use syncToRelay() + createShareLink() instead.
  * Upload an envelope to the relay. Returns the share token and URL.
  * For encrypted envelopes, the caller appends #k={key} to the URL.
  */

@@ -7,7 +7,8 @@ import {
   generateKeyPair,
   encrypt,
   encodeKeyForFragment,
-  uploadToRelay,
+  syncToRelay,
+  createShareLink,
 } from "../../sharing/index.js";
 
 export function registerShareTools(
@@ -36,15 +37,17 @@ export function registerShareTools(
           .boolean()
           .default(true)
           .describe("Encrypt the backpack before sharing (default: true)"),
-        passphrase: z
-          .string()
-          .optional()
-          .describe("Optional passphrase for additional protection"),
       },
     },
-    async ({ name, relayUrl, relayToken, encrypted, passphrase }) => {
+    async ({ name, relayUrl, relayToken, encrypted }) => {
       const data = await backpack.loadOntology(name);
       const plaintext = new TextEncoder().encode(JSON.stringify(data));
+
+      const stats = {
+        node_count: data.nodes.length,
+        edge_count: data.edges.length,
+        node_types: [...new Set(data.nodes.map((n) => n.type))],
+      };
 
       let payload: Uint8Array;
       let format: "plaintext" | "age-v1";
@@ -61,19 +64,18 @@ export function registerShareTools(
       }
 
       const graphCount = 1;
-      const envelope = await createEnvelope(name, payload, format, graphCount);
+      const envelope = await createEnvelope(name, payload, format, graphCount, stats);
 
-      const result = await uploadToRelay(
-        { url: relayUrl, token: relayToken },
-        envelope,
-        passphrase,
-      );
+      const relayConfig = { url: relayUrl, token: relayToken };
+      await syncToRelay(relayConfig, name, envelope);
+      const result = await createShareLink(relayConfig, name);
 
       const shareLink = fragmentKey
         ? `${result.url}#k=${fragmentKey}`
         : result.url;
 
       let text = `Shared "${name}" successfully.\n\nShare link: ${shareLink}`;
+      text += `\nGraph stats: ${stats.node_count} nodes, ${stats.edge_count} edges, ${stats.node_types.length} types`;
       if (result.expiresAt) {
         text += `\nExpires: ${result.expiresAt}`;
       }

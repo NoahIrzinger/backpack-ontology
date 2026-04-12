@@ -8,5 +8,5 @@ export {
   decodeKeyFromFragment,
 } from "./crypto.js";
 export type { KeyPair } from "./crypto.js";
-export { uploadToRelay, downloadFromRelay, getShareMeta } from "./relay.js";
+export { syncToRelay, createShareLink, uploadToRelay, downloadFromRelay, getShareMeta } from "./relay.js";
 export type { ShareResult, RelayConfig } from "./relay.js";
