@@ -45,17 +45,17 @@ export class BackpackAppBackend implements StorageBackend {
   }
 
   async initialize(): Promise<void> {
-    await this.request("/api/ontologies");
+    await this.request("/api/graphs");
   }
 
   async listOntologies(): Promise<LearningGraphSummary[]> {
-    const res = await this.request("/api/ontologies");
+    const res = await this.request("/api/graphs");
     return (await res.json()) as LearningGraphSummary[];
   }
 
   async loadOntology(name: string): Promise<LearningGraphData> {
     const res = await this.request(
-      `/api/ontologies/${encodeURIComponent(name)}`
+      `/api/graphs/${encodeURIComponent(name)}`
     );
     return (await res.json()) as LearningGraphData;
   }
@@ -65,9 +65,7 @@ export class BackpackAppBackend implements StorageBackend {
     data: LearningGraphData,
     _expectedVersion?: number,
   ): Promise<void> {
-    // BackpackApp HTTP backend does not support optimistic concurrency yet;
-    // expectedVersion is accepted for interface conformance and ignored.
-    await this.request(`/api/ontologies/${encodeURIComponent(name)}`, {
+    await this.request(`/api/graphs/${encodeURIComponent(name)}`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
@@ -84,7 +82,7 @@ export class BackpackAppBackend implements StorageBackend {
       edges: [],
     };
 
-    await this.request("/api/ontologies", {
+    await this.request("/api/graphs", {
       method: "POST",
       body: JSON.stringify({ name, description, data }),
     });
@@ -94,7 +92,7 @@ export class BackpackAppBackend implements StorageBackend {
 
   async renameOntology(oldName: string, newName: string): Promise<void> {
     await this.request(
-      `/api/ontologies/${encodeURIComponent(oldName)}/rename`,
+      `/api/graphs/${encodeURIComponent(oldName)}/rename`,
       {
         method: "POST",
         body: JSON.stringify({ name: newName }),
@@ -103,14 +101,14 @@ export class BackpackAppBackend implements StorageBackend {
   }
 
   async deleteOntology(name: string): Promise<void> {
-    await this.request(`/api/ontologies/${encodeURIComponent(name)}`, {
+    await this.request(`/api/graphs/${encodeURIComponent(name)}`, {
       method: "DELETE",
     });
   }
 
   async ontologyExists(name: string): Promise<boolean> {
     try {
-      await this.request(`/api/ontologies/${encodeURIComponent(name)}`);
+      await this.request(`/api/graphs/${encodeURIComponent(name)}`);
       return true;
     } catch {
       return false;

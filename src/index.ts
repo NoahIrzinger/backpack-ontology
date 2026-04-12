@@ -62,6 +62,27 @@ export { initTelemetry, trackEvent, trackTokenSavings, shutdown as shutdownTelem
 // Token estimation
 export { estimateTokens, estimateGraphTokens, computeSavings, formatSavingsFooter } from "./core/token-estimate.js";
 
+// Sharing (envelope format, age encryption, relay client)
+export {
+  createEnvelope,
+  parseEnvelope,
+  generateKeyPair,
+  encrypt,
+  decrypt,
+  encodeKeyForFragment,
+  decodeKeyFromFragment,
+  uploadToRelay,
+  downloadFromRelay,
+  getShareMeta,
+} from "./sharing/index.js";
+export type {
+  EnvelopeHeader,
+  Envelope,
+  KeyPair,
+  ShareResult,
+  RelayConfig,
+} from "./sharing/index.js";
+
 // MCP server factory
 export { createMcpServer } from "./mcp/server.js";
 export type { BackpackServerConfig, BackpackLocalConfig, BackpackAppConfig } from "./mcp/server.js";

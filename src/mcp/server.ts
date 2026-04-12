@@ -14,6 +14,8 @@ import { registerVersionTools } from "./tools/version-tools.js";
 import { registerIntelligenceTools } from "./tools/intelligence-tools.js";
 import { registerRemoteTools } from "./tools/remote-tools.js";
 import { registerBackpackTools } from "./tools/backpack-tools.js";
+import { registerShareTools } from "./tools/share-tools.js";
+import { registerViewerStateResource } from "./viewer-state-resource.js";
 
 /** Configuration for local file-based storage. */
 export interface BackpackLocalConfig {
@@ -126,10 +128,19 @@ Be selective — not every conversation needs to be captured. Focus on knowledge
   registerVersionTools(server, backpack);
   registerIntelligenceTools(server, backpack);
   registerRemoteTools(server, backpack, remoteRegistry);
+  registerShareTools(server, backpack);
   // Local mode gets backpack (meta) management tools — cloud mode
   // doesn't need them since the cloud backend is a single target.
   if (!config || config.mode === "local") {
     registerBackpackTools(server, backpack);
+  }
+
+  // Viewer-state bridge: exposes the local viewer's current selection /
+  // focus / active graph as an MCP resource so any MCP client can ask
+  // "what is the user looking at?" without re-typing context. Local mode
+  // only — cloud mode has no local viewer process.
+  if (!config || config.mode === "local") {
+    registerViewerStateResource(server);
   }
 
   return server;
