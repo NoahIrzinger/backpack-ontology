@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.0 (2026-04-12)
+
+### Encrypted sharing
+- **BPAK envelope format** (`src/sharing/envelope.ts`) — binary envelope with magic bytes, versioned header, and SHA-256 checksum verification. See `docs/share-protocol.md` for the full spec.
+- **age encryption** (`src/sharing/crypto.ts`) — X25519 key pair generation, encrypt/decrypt using the `age-encryption` package. Key encoding/decoding for URL fragment transport.
+- **Relay client** (`src/sharing/relay.ts`) — upload envelopes to a share relay, download by token, fetch non-sensitive metadata. Supports passphrase-protected links.
+- **Share protocol spec** (`docs/share-protocol.md`) — v0.1 protocol covering envelope format, share link structure, relay API contract, client decrypt flow, and security considerations.
+
+### New MCP tools
+- `backpack_share` — encrypt a backpack and upload to a relay. Returns a shareable link with the decryption key in the URL fragment (server never sees the key).
+- `backpack_share_local` — export a backpack as a `.bpak` file for offline sharing via any channel.
+
+### Fixes
+- **BackpackAppBackend** — API paths updated from `/api/ontologies` to `/api/graphs` to match current backpack-app routes.
+
+### Public API
+- New exports: `createEnvelope`, `parseEnvelope`, `generateKeyPair`, `encrypt`, `decrypt`, `encodeKeyForFragment`, `decodeKeyFromFragment`, `uploadToRelay`, `downloadFromRelay`, `getShareMeta` and associated types.
+
 ## 0.6.1 (2026-04-11)
 
 ### Telemetry fixes
