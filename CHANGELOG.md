@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 (2026-04-12)
+
+### Sync & Share
+- `backpack_share` now uses the two-step sync + share flow (`PUT /api/graphs/{name}/sync` then `POST /api/graphs/{name}/share`) instead of the single `POST /v1/share` endpoint. Supports re-sync (upsert) and preserves existing share links.
+- BPAK envelope header includes graph stats (`node_count`, `edge_count`, `node_types`) for dashboard display of encrypted graphs.
+- New relay functions: `syncToRelay()`, `createShareLink()`. `uploadToRelay()` is deprecated but kept for backward compatibility.
+
 ## 0.7.0 (2026-04-12)
 
 ### Encrypted sharing
