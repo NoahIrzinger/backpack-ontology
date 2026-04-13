@@ -90,6 +90,91 @@ export function registerShareTools(
     },
   );
 
+  // backpack_import_remote — download a cloud graph to local backpack
+  server.registerTool(
+    "backpack_import_remote",
+    {
+      title: "Import Cloud Graph to Local",
+      description:
+        "Download a graph from a Backpack cloud relay and save it locally. " +
+        "The graph must be plaintext (not encrypted). Requires a Bearer token " +
+        "for authentication with the relay. If a local graph with the same " +
+        "name exists, it will be overwritten.",
+      inputSchema: {
+        name: z.string().describe("Name of the cloud graph to download"),
+        relayUrl: z
+          .string()
+          .default("https://app.backpackontology.com")
+          .describe("Cloud relay URL"),
+        relayToken: z
+          .string()
+          .describe("Bearer token for the relay (requires a backpack-app account)"),
+      },
+    },
+    async ({ name, relayUrl, relayToken }) => {
+      try {
+        const resp = await fetch(
+          `${relayUrl}/api/graphs/${encodeURIComponent(name)}`,
+          {
+            headers: { Authorization: `Bearer ${relayToken}` },
+          },
+        );
+        if (!resp.ok) {
+          const body = await resp.text();
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Error fetching cloud graph "${name}": ${resp.status} ${resp.statusText}\n${body}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const data = await resp.json();
+
+        if (!data.nodes || !data.edges) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Error: the cloud graph "${name}" does not contain plaintext graph data (it may be encrypted).`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const exists = await backpack.ontologyExists(name);
+        if (exists) {
+          await backpack.deleteOntology(name);
+        }
+
+        await backpack.createOntologyFromData(name, data);
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Imported cloud graph "${name}" to local backpack (${data.nodes.length} nodes, ${data.edges.length} edges).`,
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${(err as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
   // backpack_share_local — export as a .bpak file
   server.registerTool(
     "backpack_share_local",
