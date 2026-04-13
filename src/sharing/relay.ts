@@ -80,49 +80,6 @@ export async function createShareLink(
 }
 
 /**
- * @deprecated Use syncToRelay() + createShareLink() instead.
- * Upload an envelope to the relay. Returns the share token and URL.
- * For encrypted envelopes, the caller appends #k={key} to the URL.
- */
-export async function uploadToRelay(
-  config: RelayConfig,
-  envelope: Uint8Array,
-  passphrase?: string,
-): Promise<{ token: string; url: string; expiresAt?: string }> {
-  const accessToken =
-    typeof config.token === "function"
-      ? await config.token()
-      : config.token;
-
-  const uploadUrl = `${config.url}/v1/share`;
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/octet-stream",
-    Authorization: `Bearer ${accessToken}`,
-  };
-  if (passphrase) {
-    headers["X-Passphrase"] = passphrase;
-  }
-
-  const res = await fetch(uploadUrl, {
-    method: "POST",
-    headers,
-    body: envelope as unknown as BodyInit,
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Relay upload failed (${res.status}): ${body}`);
-  }
-
-  return (await res.json()) as {
-    token: string;
-    url: string;
-    expiresAt?: string;
-  };
-}
-
-/**
  * Download an envelope from the relay by token.
  * For encrypted shares, the ciphertext is opaque — decryption is client-side.
  */

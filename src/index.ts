@@ -71,7 +71,6 @@ export {
   decrypt,
   encodeKeyForFragment,
   decodeKeyFromFragment,
-  uploadToRelay,
   downloadFromRelay,
   getShareMeta,
 } from "./sharing/index.js";
