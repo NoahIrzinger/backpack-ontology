@@ -54,6 +54,13 @@ export interface BackpackEntry {
   color: string;
 }
 
+/** Per-backpack KB mount configuration. */
+export interface KBMountConfig {
+  name: string;
+  path: string;
+  writable?: boolean; // default true
+}
+
 /**
  * On-disk config file shape (v2).
  */
@@ -61,6 +68,7 @@ export interface BackpacksConfigFile {
   version: number;
   paths: string[];
   active: string;
+  kb?: Record<string, KBMountConfig[]>;
 }
 
 // Legacy v1 shapes used by the migration code.
@@ -254,6 +262,7 @@ export async function loadRegistry(): Promise<BackpacksConfigFile> {
       version: CONFIG_VERSION,
       paths: cfg.paths.slice(),
       active: cfg.active,
+      ...(cfg.kb ? { kb: cfg.kb } : {}),
     };
   }
 
@@ -422,4 +431,86 @@ export async function setActiveBackpack(pathOrName: string): Promise<BackpackEnt
   cfg.active = entry.path;
   await writeJsonAtomic(backpacksConfigFile(), cfg);
   return entry;
+}
+
+// --- KB mount configuration ---
+
+/**
+ * Get the KB mounts for a backpack. If none configured, returns a
+ * single default "knowledge-base" mount as a sibling to the graphs directory.
+ * e.g., if graphsDir is ~/.local/share/backpack/graphs,
+ * the default KB is ~/.local/share/backpack/knowledge-base.
+ */
+export async function getKBMounts(backpackPath: string): Promise<KBMountConfig[]> {
+  const cfg = await loadRegistry();
+  const resolved = path.resolve(backpackPath);
+  const mounts = cfg.kb?.[resolved];
+  if (mounts && mounts.length > 0) return mounts;
+  return [{ name: "knowledge-base", path: path.join(resolved, "..", "knowledge-base") }];
+}
+
+/** Replace all KB mounts for a backpack. */
+export async function setKBMounts(backpackPath: string, mounts: KBMountConfig[]): Promise<void> {
+  if (mounts.length === 0) {
+    throw new BackpackRegistryError("cannot set empty KB mount list", "INVALID");
+  }
+  const cfg = await loadRegistry();
+  const resolved = path.resolve(backpackPath);
+  if (!cfg.kb) cfg.kb = {};
+  cfg.kb[resolved] = mounts.map((m) => ({
+    name: m.name,
+    path: normalizePath(m.path),
+    ...(m.writable === false ? { writable: false } : {}),
+  }));
+  await writeJsonAtomic(backpacksConfigFile(), cfg);
+}
+
+/** Add a KB mount to a backpack. Idempotent by name. */
+export async function addKBMount(backpackPath: string, mount: KBMountConfig): Promise<void> {
+  const mounts = await getKBMounts(backpackPath);
+  if (mounts.some((m) => m.name === mount.name)) {
+    throw new BackpackRegistryError(
+      `KB mount "${mount.name}" already exists`,
+      "DUPLICATE",
+    );
+  }
+  mounts.push({
+    name: mount.name,
+    path: normalizePath(mount.path),
+    ...(mount.writable === false ? { writable: false } : {}),
+  });
+  await setKBMounts(backpackPath, mounts);
+}
+
+/** Remove a KB mount by name. Cannot remove the last mount. */
+export async function removeKBMount(backpackPath: string, mountName: string): Promise<void> {
+  const mounts = await getKBMounts(backpackPath);
+  const filtered = mounts.filter((m) => m.name !== mountName);
+  if (filtered.length === mounts.length) {
+    throw new BackpackRegistryError(
+      `KB mount "${mountName}" not found`,
+      "NOT_FOUND",
+    );
+  }
+  if (filtered.length === 0) {
+    throw new BackpackRegistryError(
+      "cannot remove the last KB mount",
+      "LAST_MOUNT",
+    );
+  }
+  await setKBMounts(backpackPath, filtered);
+}
+
+/** Update the path of an existing KB mount by name. */
+export async function editKBMount(backpackPath: string, mountName: string, newPath: string): Promise<void> {
+  const mounts = await getKBMounts(backpackPath);
+  const mount = mounts.find((m) => m.name === mountName);
+  if (!mount) {
+    throw new BackpackRegistryError(
+      `KB mount "${mountName}" not found`,
+      "NOT_FOUND",
+    );
+  }
+  mount.path = normalizePath(newPath);
+  await setKBMounts(backpackPath, mounts);
 }

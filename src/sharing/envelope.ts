@@ -15,6 +15,7 @@ export interface EnvelopeHeader {
   created_at: string;
   backpack_name: string;
   graph_count?: number;
+  document_count?: number;
   node_count?: number;
   edge_count?: number;
   node_types?: string[];
@@ -42,7 +43,7 @@ export async function createEnvelope(
   payload: Uint8Array,
   format: "plaintext" | "age-v1",
   graphCount?: number,
-  stats?: { node_count?: number; edge_count?: number; node_types?: string[] },
+  stats?: { node_count?: number; edge_count?: number; node_types?: string[]; document_count?: number },
 ): Promise<Uint8Array> {
   const checksum = await sha256hex(payload);
 
@@ -51,6 +52,7 @@ export async function createEnvelope(
     created_at: new Date().toISOString(),
     backpack_name: backpackName,
     graph_count: graphCount,
+    document_count: stats?.document_count,
     node_count: stats?.node_count,
     edge_count: stats?.edge_count,
     node_types: stats?.node_types,

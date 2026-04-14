@@ -15,6 +15,7 @@ import { registerIntelligenceTools } from "./tools/intelligence-tools.js";
 import { registerRemoteTools } from "./tools/remote-tools.js";
 import { registerBackpackTools } from "./tools/backpack-tools.js";
 import { registerShareTools } from "./tools/share-tools.js";
+import { registerKBTools } from "./tools/kb-tools.js";
 import { registerViewerStateResource } from "./viewer-state-resource.js";
 
 /** Configuration for local file-based storage. */
@@ -133,6 +134,7 @@ Be selective — not every conversation needs to be captured. Focus on knowledge
   // doesn't need them since the cloud backend is a single target.
   if (!config || config.mode === "local") {
     registerBackpackTools(server, backpack);
+    registerKBTools(server, backpack);
   }
 
   // Viewer-state bridge: exposes the local viewer's current selection /

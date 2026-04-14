@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { writeFile } from "node:fs/promises";
 import type { Backpack } from "../../core/backpack.js";
+import type { KBDocument } from "../../core/document-store.js";
 import {
   createEnvelope,
   generateKeyPair,
@@ -10,6 +11,17 @@ import {
   syncToRelay,
   createShareLink,
 } from "../../sharing/index.js";
+
+/**
+ * V2 share payload — includes both graph data and KB documents.
+ * V1 payloads are raw LearningGraphData (no version field).
+ * Readers detect v2 by checking for the `version` field.
+ */
+interface SharePayloadV2 {
+  version: 2;
+  graph: import("../../core/types.js").LearningGraphData;
+  documents: Array<Omit<KBDocument, "collection">>;
+}
 
 export function registerShareTools(
   server: McpServer,
@@ -41,12 +53,33 @@ export function registerShareTools(
     },
     async ({ name, relayUrl, relayToken, encrypted }) => {
       const data = await backpack.loadOntology(name);
-      const plaintext = new TextEncoder().encode(JSON.stringify(data));
+
+      // Load KB documents associated with this graph
+      let kbDocs: Array<Omit<KBDocument, "collection">> = [];
+      try {
+        const docs = await backpack.documents();
+        const result = await docs.list();
+        kbDocs = await Promise.all(
+          result.documents
+            .filter((d) => d.sourceGraphs.includes(name))
+            .map(async (d) => {
+              const full = await docs.read(d.id);
+              const { collection: _, ...rest } = full;
+              return rest;
+            }),
+        );
+      } catch {
+        // No KB configured or inaccessible — share graph only
+      }
+
+      const shareData: SharePayloadV2 = { version: 2, graph: data, documents: kbDocs };
+      const plaintext = new TextEncoder().encode(JSON.stringify(shareData));
 
       const stats = {
         node_count: data.nodes.length,
         edge_count: data.edges.length,
         node_types: [...new Set(data.nodes.map((n) => n.type))],
+        document_count: kbDocs.length,
       };
 
       let payload: Uint8Array;
@@ -76,6 +109,9 @@ export function registerShareTools(
 
       let text = `Shared "${name}" successfully.\n\nShare link: ${shareLink}`;
       text += `\nGraph stats: ${stats.node_count} nodes, ${stats.edge_count} edges, ${stats.node_types.length} types`;
+      if (stats.document_count > 0) {
+        text += `\nKB documents: ${stats.document_count} included`;
+      }
       if (result.expiresAt) {
         text += `\nExpires: ${result.expiresAt}`;
       }
@@ -195,7 +231,28 @@ export function registerShareTools(
     },
     async ({ name, output, encrypted }) => {
       const data = await backpack.loadOntology(name);
-      const plaintext = new TextEncoder().encode(JSON.stringify(data));
+
+      // Load KB documents associated with this graph
+      let kbDocs: Array<Omit<KBDocument, "collection">> = [];
+      try {
+        const docs = await backpack.documents();
+        const result = await docs.list();
+        const fullDocs = await Promise.all(
+          result.documents
+            .filter((d) => d.sourceGraphs.includes(name))
+            .map(async (d) => {
+              const full = await docs.read(d.id);
+              const { collection: _, ...rest } = full;
+              return rest;
+            }),
+        );
+        kbDocs = fullDocs;
+      } catch {
+        // No KB configured
+      }
+
+      const shareData: SharePayloadV2 = { version: 2, graph: data, documents: kbDocs };
+      const plaintext = new TextEncoder().encode(JSON.stringify(shareData));
 
       let payload: Uint8Array;
       let format: "plaintext" | "age-v1";
@@ -211,10 +268,14 @@ export function registerShareTools(
         format = "plaintext";
       }
 
-      const envelope = await createEnvelope(name, payload, format, 1);
+      const stats = { document_count: kbDocs.length };
+      const envelope = await createEnvelope(name, payload, format, 1, stats);
       await writeFile(output, envelope);
 
       let text = `Exported "${name}" to ${output}`;
+      if (kbDocs.length > 0) {
+        text += ` (includes ${kbDocs.length} KB document${kbDocs.length > 1 ? "s" : ""})`;
+      }
       if (encrypted) {
         text += `\n\nSecret key (needed to decrypt):\n${secretKey}`;
         text +=

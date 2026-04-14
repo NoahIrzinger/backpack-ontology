@@ -33,9 +33,11 @@ import {
   getActiveBackpack,
   setActiveBackpack,
   listBackpacks,
+  getKBMounts,
   type BackpackEntry,
 } from "./backpacks-registry.js";
 import { EventSourcedBackend } from "../storage/event-sourced-backend.js";
+import { DocumentStore, type KBMount } from "./document-store.js";
 
 /**
  * The main Backpack API. Composes a StorageBackend with the Graph engine.
@@ -54,6 +56,7 @@ export class Backpack {
   private versions: Map<string, number> = new Map();
   private tokenCache: Map<string, number> = new Map();
   private activeBackpack: BackpackEntry | null = null;
+  private _documents: DocumentStore | null = null;
 
   constructor(storage: StorageBackend) {
     this.storage = storage;
@@ -89,6 +92,27 @@ export class Backpack {
     return this.activeBackpack;
   }
 
+  /**
+   * Get the DocumentStore for the active backpack's KB mounts.
+   * Lazily created and cached. Reset on switchBackpack().
+   */
+  async documents(): Promise<DocumentStore> {
+    if (!this._documents) {
+      const entry = this.activeBackpack;
+      if (!entry) {
+        throw new Error("No active backpack — cannot resolve KB path");
+      }
+      const mountConfigs = await getKBMounts(entry.path);
+      const mounts: KBMount[] = mountConfigs.map((m) => ({
+        name: m.name,
+        path: m.path,
+        writable: m.writable !== false,
+      }));
+      this._documents = new DocumentStore(mounts);
+    }
+    return this._documents;
+  }
+
   async listRegisteredBackpacks(): Promise<BackpackEntry[]> {
     return listBackpacks();
   }
@@ -108,6 +132,7 @@ export class Backpack {
     this.graphs.clear();
     this.versions.clear();
     this.tokenCache.clear();
+    this._documents = null;
     // Stand up a fresh backend at the new path
     const newBackend = new EventSourcedBackend(undefined, {
       graphsDirOverride: entry.path,

@@ -6,6 +6,9 @@ import { JsonFileBackend } from "../storage/json-file-backend.js";
 import { BackpackAppBackend } from "../storage/backpack-app-backend.js";
 import { OAuthClient } from "../auth/oauth.js";
 import { loadConfig } from "../core/config.js";
+import { DocumentStore } from "../core/document-store.js";
+import { getKBMounts } from "../core/backpacks-registry.js";
+import { getActiveBackpack } from "../core/backpacks-registry.js";
 
 const DEFAULTS = {
   url: "https://app.backpackontology.com",
@@ -88,10 +91,12 @@ async function main() {
   const local = new JsonFileBackend(config.dataDir);
   await local.initialize();
 
-  // Set up remote backend
+  // Set up remote backend + token provider for KB sync
   let remote: BackpackAppBackend;
+  let getToken: () => Promise<string>;
   if (staticToken) {
     remote = new BackpackAppBackend(apiUrl, staticToken);
+    getToken = async () => staticToken;
   } else {
     const cacheKey = crypto
       .createHash("sha256")
@@ -100,6 +105,7 @@ async function main() {
       .slice(0, 12);
     const oauth = new OAuthClient(clientId, issuerUrl, cacheKey);
     remote = new BackpackAppBackend(apiUrl, () => oauth.getAccessToken());
+    getToken = () => oauth.getAccessToken();
   }
 
   // List local ontologies
@@ -161,9 +167,54 @@ async function main() {
     `  Done. ${created} created, ${updated} updated, ${skipped} failed.`
   );
 
-  if (created + updated > 0) {
+  // --- Sync KB documents ---
+  let docsSynced = 0;
+  try {
+    const activeEntry = await getActiveBackpack();
+    const mountConfigs = await getKBMounts(activeEntry.path);
+    const docStore = new DocumentStore(
+      mountConfigs.map((m) => ({ name: m.name, path: m.path, writable: m.writable !== false })),
+    );
+    const result = await docStore.list();
+
+    if (result.documents.length > 0) {
+      console.log("");
+      console.log(`  Found ${result.documents.length} KB document(s) to sync.`);
+
+      for (const summary of result.documents) {
+        try {
+          const doc = await docStore.read(summary.id);
+          // Upload document as a graph-associated resource via the app API
+          const token = await getToken();
+          const resp = await fetch(
+            `${apiUrl}/api/kb/documents/${encodeURIComponent(doc.id)}`,
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(doc),
+            },
+          );
+          if (resp.ok) {
+            docsSynced++;
+            console.log(`  Synced doc: ${doc.title}`);
+          } else {
+            console.error(`  Failed doc: ${doc.title} — ${resp.status}`);
+          }
+        } catch (err) {
+          console.error(`  Failed doc: ${summary.title} — ${(err as Error).message}`);
+        }
+      }
+    }
+  } catch {
+    // No KB configured — skip
+  }
+
+  if (created + updated > 0 || docsSynced > 0) {
     console.log("");
-    console.log("  Your ontologies are now in Backpack App.");
+    console.log(`  Your ontologies${docsSynced > 0 ? ` and ${docsSynced} KB document(s)` : ""} are now in Backpack App.`);
     console.log(
       "  To switch to cloud mode, update your .mcp.json to use backpack-app"
     );

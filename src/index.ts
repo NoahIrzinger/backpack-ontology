@@ -43,11 +43,29 @@ export {
   unregisterBackpack,
   getActiveBackpack,
   setActiveBackpack,
+  getKBMounts,
+  setKBMounts,
+  addKBMount,
+  removeKBMount,
+  editKBMount,
   colorForPath,
   deriveName,
   BackpackRegistryError,
 } from "./core/backpacks-registry.js";
-export type { BackpackEntry } from "./core/backpacks-registry.js";
+export type { BackpackEntry, KBMountConfig } from "./core/backpacks-registry.js";
+
+// Knowledge Base (document store)
+export { DocumentStore } from "./core/document-store.js";
+export type {
+  KBMount,
+  KBDocument,
+  KBDocumentMeta,
+  KBDocumentSummary,
+  KBListResult,
+  KBMountInfo,
+  WikilinkRef,
+} from "./core/document-store.js";
+export { parseWikilinks } from "./core/document-store.js";
 
 // Remote graph registry (subscriptions to graphs hosted at HTTPS URLs)
 export { RemoteRegistry, RemoteRegistryError } from "./core/remote-registry.js";

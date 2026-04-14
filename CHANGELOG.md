@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Knowledge Base document layer
+- **DocumentStore** — persistent KB document store with multi-mount support, pagination (`limit`/`offset`), recursive directory scanning, and YAML frontmatter with path traversal protection.
+- **Multi-mount KB** — each backpack gets an array of named KB mounts (filesystem paths). Default mount at `~/.local/share/backpack/knowledge-base/` (sibling to `graphs/`). Mounts can be writable or read-only.
+- **Wikilink parsing** — `ingest()` extracts Obsidian-style `[[wikilinks]]` from document content.
+- **KB config** in `backpacks.json` — `getKBMounts`, `setKBMounts`, `addKBMount`, `removeKBMount`, `editKBMount`.
+
+### New MCP tools
+- `backpack_kb_save` — save/update a KB document (markdown + metadata).
+- `backpack_kb_list` — list documents with pagination, filter by collection.
+- `backpack_kb_read` — read full document content by ID.
+- `backpack_kb_delete` — delete a document (respects read-only mounts).
+- `backpack_kb_search` — full-text search across title, tags, and content with pagination.
+- `backpack_kb_ingest` — read a document (by ID or file path) for mining back into a graph. Extracts wikilinks.
+- `backpack_kb_mounts` — list configured KB mounts with document counts.
+- `backpack_kb_mount` — add/remove KB mounts.
+
+### Sharing & sync
+- **Share payload v2** — encrypted BPAK envelopes now include KB documents alongside graph data. Envelope header includes `document_count`.
+- **backpack-sync** — uploads KB documents to Backpack App with proper OAuth token support.
+
+### Public API
+- New exports: `DocumentStore`, `KBDocument`, `KBDocumentMeta`, `KBDocumentSummary`, `KBListResult`, `KBMountInfo`, `KBMount`, `WikilinkRef`, `parseWikilinks`, `getKBMounts`, `setKBMounts`, `addKBMount`, `removeKBMount`, `editKBMount`, `KBMountConfig`.
+
 ## 0.7.1 (2026-04-12)
 
 ### Sync & Share
