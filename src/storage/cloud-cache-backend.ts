@@ -241,11 +241,12 @@ export class CloudCacheBackend implements StorageBackend {
     // Refresh graphs
     const graphsRes = await fetch(`${relayUrl}/api/graphs`, { headers: { Authorization } });
     if (graphsRes.ok) {
-      const graphs = await graphsRes.json() as { name: string; encrypted?: boolean }[];
+      const graphs = await graphsRes.json() as { name: string; encrypted?: boolean; source?: string }[];
       const cloudNames = new Set<string>();
       for (const g of graphs) {
         cloudNames.add(g.name);
         if (g.encrypted) continue; // skip encrypted (can't cache without key)
+        if (g.source === "local") continue; // skip device-synced graphs (they belong to local backpacks)
         try {
           const dataRes = await fetch(`${relayUrl}/api/graphs/${encodeURIComponent(g.name)}`, { headers: { Authorization } });
           if (dataRes.ok) {
