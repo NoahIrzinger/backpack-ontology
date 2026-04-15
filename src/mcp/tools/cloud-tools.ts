@@ -383,8 +383,24 @@ export function registerCloudTools(
             "Authorization": `Bearer ${token}`,
           };
           try {
-            syncHeaders["X-Backpack-Device-Name"] = (await import("os")).hostname();
-            syncHeaders["X-Backpack-Device-Platform"] = (await import("os")).platform();
+            const osModule = await import("os");
+            syncHeaders["X-Backpack-Device-Name"] = osModule.hostname();
+            syncHeaders["X-Backpack-Device-Hostname"] = osModule.hostname();
+            syncHeaders["X-Backpack-Device-Platform"] = osModule.platform();
+            // Machine ID
+            const idPath = path.join(configDir(), "machine-id");
+            let mid: string;
+            try {
+              mid = (await fs.readFile(idPath, "utf-8")).trim();
+            } catch {
+              mid = crypto.createHash("sha256").update(osModule.hostname() + osModule.platform()).digest("hex").slice(0, 16);
+              try { await fs.mkdir(path.dirname(idPath), { recursive: true }); } catch {}
+              await fs.writeFile(idPath, mid, "utf-8");
+            }
+            syncHeaders["X-Backpack-Device-Id"] = mid;
+            // Source backpack name
+            const entry = backpack.getActiveBackpackEntry();
+            if (entry) syncHeaders["X-Backpack-Source-Name"] = entry.name;
           } catch {}
 
           const res = await fetch(`${RELAY_URL}/api/graphs/${encodeURIComponent(name)}/sync`, {

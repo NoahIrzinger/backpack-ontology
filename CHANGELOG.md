@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Sync provenance
+- **Device identity in sync** — `backpack_cloud_sync` MCP tool now sends `X-Backpack-Device-Id` (machine-id), `X-Backpack-Device-Hostname`, and `X-Backpack-Source-Name` (active backpack name) headers with every BPAK sync to the relay.
+
 ## 0.7.4
 
 ### Cloud sync
