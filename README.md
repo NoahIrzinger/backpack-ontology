@@ -221,6 +221,35 @@ No commands to learn. Just talk naturally.
 
 Claude will open the graph visualizer so you can explore your knowledge visually.
 
+## Knowledge base
+
+Each backpack includes a document-oriented knowledge base alongside its learning graphs. KB documents are markdown files stored per-mount, with support for multiple mount points (local directories, cloud, or extension-provided).
+
+- **KB mounts** — register directories as document sources (`backpack_kb_mount`), list active mounts (`backpack_kb_mounts`)
+- **Document management** — save, list, read, delete, and search documents across mounts (`backpack_kb_save`, `backpack_kb_list`, `backpack_kb_read`, `backpack_kb_delete`, `backpack_kb_search`)
+- **Graph-to-KB ingest** — synthesize graph knowledge into KB documents (`backpack_kb_ingest`)
+
+Say to Claude:
+
+> "Save a document about our deployment process to the knowledge base"
+
+> "Search the KB for anything about compliance"
+
+## Cloud sync
+
+Connect your local backpack to BackpackApp cloud for cross-device access and sharing.
+
+- **CloudCacheBackend** — write-through cache that stores graphs locally and syncs to the cloud. Used by the viewer for seamless switching between local and cloud backpacks.
+- **Cloud tools** — sign in (`backpack_cloud_login`), list cloud graphs (`backpack_cloud_list`), search across them (`backpack_cloud_search`), and import to local (`backpack_cloud_import`)
+
+Say to Claude:
+
+> "Sign in to Backpack cloud"
+
+> "What graphs do I have in the cloud?"
+
+> "Import the clients graph from cloud"
+
 ## What people use it for
 
 - **Client management**: keep track of accounts, contacts, contract details, and conversations across sessions
@@ -359,6 +388,8 @@ Claude uses these automatically. You don't need to call them directly.
 | Snapshot and revert | `backpack_snapshot`, `backpack_versions`, `backpack_rollback`, `backpack_diff` |
 | Branches | `backpack_branch_create`, `backpack_branch_switch`, `backpack_branch_list` |
 | Collaboration awareness | `backpack_lock_status` (reads the current edit heartbeat on shared graphs) |
+| Knowledge base | `backpack_kb_save`, `backpack_kb_list`, `backpack_kb_read`, `backpack_kb_delete`, `backpack_kb_search`, `backpack_kb_ingest`, `backpack_kb_mounts`, `backpack_kb_mount` |
+| Cloud sync | `backpack_cloud_login`, `backpack_cloud_list`, `backpack_cloud_search`, `backpack_cloud_import` |
 | Delete | `backpack_remove_node`, `backpack_remove_edge`, `backpack_delete` |
 
 **Autonomous mining** (plugin-only): the `backpack-mine` skill in the [Claude Code plugin](https://github.com/NoahIrzinger/backpack-ontology-plugin) drives an iteration loop that finds sources on the web, extracts entities and relationships, validates each batch, and stops on convergence. Say "mine &lt;topic&gt; into a learning graph" and the skill takes over.

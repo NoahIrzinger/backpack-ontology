@@ -242,7 +242,9 @@ export class CloudCacheBackend implements StorageBackend {
     const graphsRes = await fetch(`${relayUrl}/api/graphs`, { headers: { Authorization } });
     if (graphsRes.ok) {
       const graphs = await graphsRes.json() as { name: string; encrypted?: boolean }[];
+      const cloudNames = new Set<string>();
       for (const g of graphs) {
+        cloudNames.add(g.name);
         if (g.encrypted) continue; // skip encrypted (can't cache without key)
         try {
           const dataRes = await fetch(`${relayUrl}/api/graphs/${encodeURIComponent(g.name)}`, { headers: { Authorization } });
@@ -253,13 +255,24 @@ export class CloudCacheBackend implements StorageBackend {
           }
         } catch { /* skip individual failures */ }
       }
+      // Remove cached graphs that no longer exist on the cloud
+      try {
+        const cached = await fs.readdir(this.graphsDir(), { withFileTypes: true });
+        for (const entry of cached) {
+          if (entry.isDirectory() && !cloudNames.has(entry.name)) {
+            await fs.rm(path.join(this.graphsDir(), entry.name), { recursive: true });
+          }
+        }
+      } catch { /* no cache dir yet */ }
     }
 
     // Refresh KB docs
     const kbRes = await fetch(`${relayUrl}/api/kb/documents?limit=1000`, { headers: { Authorization } });
     if (kbRes.ok) {
       const { documents } = await kbRes.json() as { documents: { id: string }[] };
+      const cloudDocIds = new Set<string>();
       for (const d of documents) {
+        cloudDocIds.add(d.id);
         try {
           const docRes = await fetch(`${relayUrl}/api/kb/documents/${encodeURIComponent(d.id)}`, { headers: { Authorization } });
           if (docRes.ok) {
@@ -269,6 +282,16 @@ export class CloudCacheBackend implements StorageBackend {
           }
         } catch { /* skip individual failures */ }
       }
+      // Remove cached KB docs that no longer exist on the cloud
+      try {
+        const cached = await fs.readdir(this.kbDir());
+        for (const f of cached) {
+          const id = f.replace(/\.json$/, "");
+          if (f.endsWith(".json") && !cloudDocIds.has(id)) {
+            await fs.unlink(path.join(this.kbDir(), f));
+          }
+        }
+      } catch { /* no cache dir yet */ }
     }
 
     // Update meta

@@ -159,7 +159,8 @@ export function registerCloudTools(
     {
       title: "Import Cloud Graph",
       description:
-        "Pull a graph from the cloud backpack into the local backpack as an editable copy. " +
+        "Import a cloud graph as a local copy. This creates a fork — edits to the local copy " +
+        "do not sync back to cloud. For live cloud access, use the Cloud backpack in the viewer. " +
         "Encrypted graphs cannot be imported this way — use the viewer to decrypt them first. " +
         "If a local graph with the same name exists, use asLocalName to rename on import.",
       inputSchema: {
@@ -300,6 +301,168 @@ export function registerCloudTools(
         }
         lines.push(`  → Use backpack_cloud_import("${r.graph}") to pull this graph locally for full access.\n`);
       }
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    }
+  );
+
+  // --- backpack_cloud_sync ---
+  server.registerTool(
+    "backpack_cloud_sync",
+    {
+      title: "Sync to Cloud",
+      description:
+        "Push local graphs to the cloud backpack as plaintext JSON. " +
+        "Specify graphName to sync a single graph, or omit to sync all local graphs. " +
+        "For encrypted sync, use the viewer's Share panel instead. " +
+        "Requires authentication — use backpack_cloud_login first if not signed in.",
+      inputSchema: {
+        graphName: z.string().optional().describe("Name of a specific graph to sync (syncs all if omitted)"),
+      },
+    },
+    async ({ graphName }) => {
+      trackEvent("tool_call", { tool: "backpack_cloud_sync" });
+      const token = await resolveCloudToken();
+      if (!token) {
+        return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
+      }
+
+      // Determine which graphs to sync
+      let names: string[];
+      if (graphName) {
+        const exists = await backpack.ontologyExists(graphName);
+        if (!exists) {
+          return { content: [{ type: "text" as const, text: `Local graph "${graphName}" not found.` }] };
+        }
+        names = [graphName];
+      } else {
+        const all = await backpack.listOntologies();
+        names = all.map(o => o.name);
+        if (names.length === 0) {
+          return { content: [{ type: "text" as const, text: "No local graphs to sync." }] };
+        }
+      }
+
+      let synced = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const name of names) {
+        try {
+          const data = await backpack.loadOntology(name);
+          const res = await fetch(`${RELAY_URL}/api/graphs/${encodeURIComponent(name)}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`,
+            },
+            body: JSON.stringify(data),
+          });
+          if (res.ok) {
+            synced++;
+          } else {
+            failed++;
+            errors.push(`${name}: ${res.status}`);
+          }
+        } catch (err) {
+          failed++;
+          errors.push(`${name}: ${(err as Error).message}`);
+        }
+      }
+
+      const lines = [`Cloud sync complete: ${synced} synced, ${failed} failed (of ${names.length} total).`];
+      if (errors.length > 0) {
+        lines.push("\nErrors:");
+        for (const e of errors) lines.push(`  - ${e}`);
+      }
+      if (synced > 0) {
+        lines.push("\nNote: graphs were synced as plaintext. For encrypted sync, use the viewer's Share panel.");
+      }
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    }
+  );
+
+  // --- backpack_cloud_refresh ---
+  server.registerTool(
+    "backpack_cloud_refresh",
+    {
+      title: "Refresh Cloud Status",
+      description:
+        "Fetch the current state of the cloud backpack — lists all cloud graphs and KB documents. " +
+        "Use this to see what's available in the cloud before importing or syncing. " +
+        "Requires authentication — use backpack_cloud_login first if not signed in.",
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      trackEvent("tool_call", { tool: "backpack_cloud_refresh" });
+      const token = await resolveCloudToken();
+      if (!token) {
+        return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
+      }
+
+      const email = emailFromToken(token);
+      const lines: string[] = [`Cloud backpack${email ? ` (${email})` : ""}:\n`];
+
+      // Fetch graphs
+      let graphCount = 0;
+      try {
+        const res = await fetch(`${RELAY_URL}/api/graphs`, {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const graphs = await res.json() as { name: string; description?: string; nodeCount?: number; edgeCount?: number; encrypted?: boolean; source?: string }[];
+          graphCount = graphs.length;
+          if (graphs.length > 0) {
+            lines.push(`Graphs (${graphs.length}):`);
+            for (const g of graphs) {
+              const badges: string[] = [];
+              if (g.encrypted) badges.push("encrypted");
+              if (g.source === "local") badges.push("synced");
+              const badgeStr = badges.length > 0 ? ` [${badges.join(", ")}]` : "";
+              lines.push(`  - ${g.name}${badgeStr}: ${g.nodeCount ?? "?"} nodes, ${g.edgeCount ?? "?"} edges`);
+            }
+          } else {
+            lines.push("Graphs: none");
+          }
+        } else {
+          lines.push(`Graphs: failed to fetch (${res.status})`);
+        }
+      } catch (err) {
+        lines.push(`Graphs: error (${(err as Error).message})`);
+      }
+
+      // Fetch KB documents
+      try {
+        const res = await fetch(`${RELAY_URL}/api/kb/documents`, {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const { documents: docs } = await res.json() as { documents: { id: string; title?: string; sourceGraphs?: string[] }[] };
+          if (docs.length > 0) {
+            lines.push(`\nKB Documents (${docs.length}):`);
+            for (const d of docs) {
+              const title = d.title || d.id;
+              const graphs = d.sourceGraphs?.join(", ") || "unlinked";
+              lines.push(`  - ${title} (${graphs})`);
+            }
+          } else {
+            lines.push("\nKB Documents: none");
+          }
+        } else if (res.status !== 404) {
+          lines.push(`\nKB Documents: failed to fetch (${res.status})`);
+        }
+      } catch {
+        // KB endpoint may not exist — skip silently
+      }
+
+      // Compare with local
+      try {
+        const local = await backpack.listOntologies();
+        if (local.length > 0) {
+          lines.push(`\nLocal graphs (${local.length}): ${local.map(o => o.name).join(", ")}`);
+        }
+      } catch { /* ignore */ }
 
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     }
