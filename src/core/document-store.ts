@@ -56,6 +56,7 @@ export interface KBMountInfo {
   path: string;
   writable: boolean;
   docCount: number;
+  type?: "local" | "cloud" | "extension";
 }
 
 /** Reference extracted from an Obsidian [[wikilink]]. */
@@ -492,6 +493,7 @@ export class DocumentStore {
         path: mount.path,
         writable: mount.writable,
         docCount: files.length,
+        type: "local",
       });
     }
     return infos;

@@ -30,6 +30,7 @@ export {
   LOCK_FRESH_MS,
 } from "./storage/event-sourced-backend.js";
 export type { LockInfo } from "./storage/event-sourced-backend.js";
+export { CloudCacheBackend } from "./storage/cloud-cache-backend.js";
 
 // Author name generator (docker-style fallback when BACKPACK_AUTHOR is unset)
 export { generateAuthorName, resolveAuthorName } from "./core/author-name.js";
