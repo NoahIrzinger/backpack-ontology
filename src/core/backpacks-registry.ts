@@ -330,6 +330,24 @@ export async function registerBackpack(rawPath: string): Promise<BackpackEntry> 
     if (entry) return entry;
   }
 
+  // Prevent nesting — a backpack cannot be inside another backpack or contain one
+  const resolvedWithSep = resolved.endsWith(path.sep) ? resolved : resolved + path.sep;
+  for (const existing of cfg.paths) {
+    const existingWithSep = existing.endsWith(path.sep) ? existing : existing + path.sep;
+    if (resolvedWithSep.startsWith(existingWithSep)) {
+      throw new BackpackRegistryError(
+        `"${resolved}" is inside existing backpack "${existing}". Backpacks cannot be nested.`,
+        "INVALID",
+      );
+    }
+    if (existingWithSep.startsWith(resolvedWithSep)) {
+      throw new BackpackRegistryError(
+        `"${resolved}" contains existing backpack "${existing}". Backpacks cannot be nested.`,
+        "INVALID",
+      );
+    }
+  }
+
   // Make sure the directory is usable
   try {
     await fs.mkdir(resolved, { recursive: true });
