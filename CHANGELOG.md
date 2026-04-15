@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.7.4
+
+### Cloud sync
+- **CloudCacheBackend** — write-through cache backend for cloud backpack data. Reads from local cache (`~/.cache/backpack/cloud/`), writes to cloud relay API. Used by the viewer for cloud backpack switching.
+- **Stale cache cleanup** — `refreshFromCloud()` now removes cached graphs and KB docs that no longer exist on the cloud server.
+- **`backpack_cloud_sync`** MCP tool — push the active graph to the cloud relay.
+- **`backpack_cloud_refresh`** MCP tool — fetch and display cloud graph and KB document status.
+- **KBMountInfo type field** — `listMounts()` returns `type: "local"` on each mount.
+
+### Fixes
+- Fix KB documents API response shape in `backpack_cloud_refresh` (was parsing bare array instead of `{ documents: [...] }`).
 
 ### Knowledge Base document layer
 - **DocumentStore** — persistent KB document store with multi-mount support, pagination (`limit`/`offset`), recursive directory scanning, and YAML frontmatter with path traversal protection.
