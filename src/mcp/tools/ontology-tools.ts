@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Backpack } from "../../core/backpack.js";
 import { trackEvent } from "../../core/telemetry.js";
+import { countCloudGraphs } from "./cloud-tools.js";
 import { estimateTokens, formatSavingsFooter } from "../../core/token-estimate.js";
 import { formatWriteError } from "./error-helpers.js";
 import { auditDiscovery, HOSPITALITY_CATEGORIES } from "../../core/discovery-audit.js";
@@ -94,14 +95,24 @@ export function registerOntologyTools(
           : null,
         graphs: ontologies,
       };
+
+      // Check for cloud graphs (non-blocking, best-effort)
+      let cloudHint = "";
+      try {
+        const cloudCount = await countCloudGraphs();
+        if (cloudCount > 0) {
+          cloudHint = `\n\nAlso: ${cloudCount} graph(s) available in your cloud backpack. Use backpack_cloud_list to see them.`;
+        }
+      } catch { /* ignore */ }
+
       return {
         content: [
           {
             type: "text" as const,
             text:
               ontologies.length === 0
-                ? `Active backpack: ${activeBackpack?.name ?? "unknown"}.\nThe backpack is empty. Use backpack_create to add a learning graph.`
-                : JSON.stringify(payload, null, 2),
+                ? `Active backpack: ${activeBackpack?.name ?? "unknown"}.\nThe backpack is empty. Use backpack_create to add a learning graph.${cloudHint}`
+                : JSON.stringify(payload, null, 2) + cloudHint,
           },
         ],
       };
