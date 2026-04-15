@@ -350,19 +350,54 @@ export function registerCloudTools(
       for (const name of names) {
         try {
           const data = await backpack.loadOntology(name);
-          const res = await fetch(`${RELAY_URL}/api/graphs/${encodeURIComponent(name)}`, {
+          const graphJSON = new TextEncoder().encode(JSON.stringify(data));
+          // Build plaintext BPAK envelope
+          const typeSet = new Set<string>();
+          for (const n of data.nodes ?? []) typeSet.add(n.type);
+          const checksumBuf = await crypto.subtle.digest("SHA-256", graphJSON.buffer as ArrayBuffer);
+          const checksum = "sha256:" + Array.from(new Uint8Array(checksumBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+          const headerObj = {
+            format: "plaintext",
+            kind: "learning_graph",
+            created_at: new Date().toISOString(),
+            backpack_name: name,
+            checksum,
+            graph_count: 1,
+            node_count: data.nodes?.length ?? 0,
+            edge_count: data.edges?.length ?? 0,
+            node_types: Array.from(typeSet),
+          };
+          const headerBytes = new TextEncoder().encode(JSON.stringify(headerObj));
+          const headerLenBuf = new ArrayBuffer(4);
+          new DataView(headerLenBuf).setUint32(0, headerBytes.length, false);
+          const envelope = new Uint8Array(4 + 1 + 4 + headerBytes.length + graphJSON.length);
+          let off = 0;
+          envelope.set(new Uint8Array([0x42, 0x50, 0x41, 0x4b]), off); off += 4; // magic
+          envelope[off] = 0x01; off += 1; // version
+          envelope.set(new Uint8Array(headerLenBuf), off); off += 4;
+          envelope.set(headerBytes, off); off += headerBytes.length;
+          envelope.set(graphJSON, off);
+
+          const syncHeaders: Record<string, string> = {
+            "Content-Type": "application/octet-stream",
+            "Authorization": `Bearer ${token}`,
+          };
+          try {
+            syncHeaders["X-Backpack-Device-Name"] = (await import("os")).hostname();
+            syncHeaders["X-Backpack-Device-Platform"] = (await import("os")).platform();
+          } catch {}
+
+          const res = await fetch(`${RELAY_URL}/api/graphs/${encodeURIComponent(name)}/sync`, {
             method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`,
-            },
-            body: JSON.stringify(data),
+            headers: syncHeaders,
+            body: envelope,
           });
           if (res.ok) {
             synced++;
           } else {
             failed++;
-            errors.push(`${name}: ${res.status}`);
+            const errBody = await res.text().catch(() => "");
+            errors.push(`${name}: ${res.status} ${errBody}`);
           }
         } catch (err) {
           failed++;
