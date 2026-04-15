@@ -214,6 +214,96 @@ export function registerCloudTools(
       };
     }
   );
+
+  // --- backpack_cloud_search ---
+  server.registerTool(
+    "backpack_cloud_search",
+    {
+      title: "Search Cloud Graphs",
+      description:
+        "Search across graphs in the user's cloud backpack. Searches node types and property values. " +
+        "Specify ontology to search a single graph, or omit to search across all non-encrypted cloud graphs (up to 5). " +
+        "Requires authentication — use backpack_cloud_login first if not signed in.",
+      inputSchema: {
+        query: z.string().describe("Search query — matches node types and property values"),
+        ontology: z.string().optional().describe("Search a specific cloud graph by name (searches all if omitted)"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ query, ontology }) => {
+      trackEvent("tool_call", { tool: "backpack_cloud_search" });
+      const token = await resolveCloudToken();
+      if (!token) {
+        return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
+      }
+
+      const lowerQuery = query.toLowerCase();
+
+      // Determine which graphs to search
+      let graphNames: string[];
+      if (ontology) {
+        graphNames = [ontology];
+      } else {
+        const listRes = await fetch(`${RELAY_URL}/api/graphs`, {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (!listRes.ok) {
+          return { content: [{ type: "text" as const, text: `Failed to list cloud graphs: ${listRes.status}` }] };
+        }
+        const graphs = await listRes.json() as { name: string; encrypted?: boolean }[];
+        graphNames = graphs.filter(g => !g.encrypted).map(g => g.name).slice(0, 5);
+      }
+
+      if (graphNames.length === 0) {
+        return { content: [{ type: "text" as const, text: "No searchable cloud graphs found (encrypted graphs cannot be searched)." }] };
+      }
+
+      // Search each graph
+      const results: { graph: string; matches: { id: string; type: string; label: string }[] }[] = [];
+      for (const name of graphNames) {
+        try {
+          const res = await fetch(`${RELAY_URL}/api/graphs/${encodeURIComponent(name)}`, {
+            headers: { "Authorization": `Bearer ${token}` },
+          });
+          if (!res.ok) continue;
+          const data = await res.json() as { nodes?: { id: string; type: string; properties: Record<string, unknown> }[] };
+          if (!data.nodes) continue;
+
+          const matches = data.nodes.filter(node => {
+            if (node.type.toLowerCase().includes(lowerQuery)) return true;
+            return Object.values(node.properties).some(v => {
+              if (typeof v === "string") return v.toLowerCase().includes(lowerQuery);
+              if (Array.isArray(v)) return v.some(item => typeof item === "string" && item.toLowerCase().includes(lowerQuery));
+              return false;
+            });
+          }).slice(0, 10).map(n => ({
+            id: n.id,
+            type: n.type,
+            label: (Object.values(n.properties).find(v => typeof v === "string") as string) ?? n.id,
+          }));
+
+          if (matches.length > 0) {
+            results.push({ graph: name, matches });
+          }
+        } catch { /* skip failed graphs */ }
+      }
+
+      if (results.length === 0) {
+        return { content: [{ type: "text" as const, text: `No matches for "${query}" across ${graphNames.length} cloud graph(s). Try backpack_cloud_list to see available graphs.` }] };
+      }
+
+      const lines: string[] = [`Cloud search results for "${query}":\n`];
+      for (const r of results) {
+        lines.push(`**${r.graph}** (${r.matches.length} match${r.matches.length !== 1 ? "es" : ""}):`);
+        for (const m of r.matches) {
+          lines.push(`  - [${m.type}] ${m.label} (${m.id})`);
+        }
+        lines.push(`  → Use backpack_cloud_import("${r.graph}") to pull this graph locally for full access.\n`);
+      }
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    }
+  );
 }
 
 /** Count cloud graphs (for the hint in backpack_list). Returns 0 on any error. */
