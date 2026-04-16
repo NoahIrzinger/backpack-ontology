@@ -38,6 +38,7 @@ import {
 } from "./backpacks-registry.js";
 import { EventSourcedBackend } from "../storage/event-sourced-backend.js";
 import { DocumentStore, type KBMount } from "./document-store.js";
+import { SignalStore } from "./signal-store.js";
 
 /**
  * The main Backpack API. Composes a StorageBackend with the Graph engine.
@@ -57,6 +58,7 @@ export class Backpack {
   private tokenCache: Map<string, number> = new Map();
   private activeBackpack: BackpackEntry | null = null;
   private _documents: DocumentStore | null = null;
+  private _signals: SignalStore | null = null;
 
   constructor(storage: StorageBackend) {
     this.storage = storage;
@@ -113,6 +115,21 @@ export class Backpack {
     return this._documents;
   }
 
+  /**
+   * Get the SignalStore for the active backpack.
+   * Lazily created and cached. Reset on switchBackpack().
+   */
+  async signals(): Promise<SignalStore> {
+    if (!this._signals) {
+      const entry = this.activeBackpack;
+      if (!entry) {
+        throw new Error("No active backpack — cannot resolve signals path");
+      }
+      this._signals = new SignalStore(entry.path);
+    }
+    return this._signals;
+  }
+
   async listRegisteredBackpacks(): Promise<BackpackEntry[]> {
     return listBackpacks();
   }
@@ -133,6 +150,7 @@ export class Backpack {
     this.versions.clear();
     this.tokenCache.clear();
     this._documents = null;
+    this._signals = null;
     // Stand up a fresh backend at the new path
     const newBackend = new EventSourcedBackend(undefined, {
       graphsDirOverride: entry.path,

@@ -17,6 +17,7 @@ import { registerBackpackTools } from "./tools/backpack-tools.js";
 import { registerShareTools } from "./tools/share-tools.js";
 import { registerKBTools } from "./tools/kb-tools.js";
 import { registerCloudTools } from "./tools/cloud-tools.js";
+import { registerSignalTools } from "./tools/signal-tools.js";
 import { registerViewerStateResource } from "./viewer-state-resource.js";
 
 /** Configuration for local file-based storage. */
@@ -108,7 +109,9 @@ If the viewer isn't running, tell the user to start it with: npx backpack-viewer
 
 After updating a learning graph, include a link to view it.
 
-Be selective — not every conversation needs to be captured. Focus on knowledge with lasting value: relationships, decisions, architecture, processes, domain concepts, conventions.`,
+Be selective — not every conversation needs to be captured. Focus on knowledge with lasting value: relationships, decisions, architecture, processes, domain concepts, conventions.
+
+Signals: after running backpack_signal_detect, automatically enrich the HIGH and MEDIUM signals by rewriting their descriptions with contextual intelligence. Use the evidence node labels, properties, and your knowledge of the graphs/KBs to explain WHY each signal matters and what the user should consider doing. Then call backpack_signal_enrich with the enriched descriptions to persist them. This makes signals actionable instead of diagnostic.`,
     }
   );
 
@@ -136,6 +139,7 @@ Be selective — not every conversation needs to be captured. Focus on knowledge
   if (!config || config.mode === "local") {
     registerBackpackTools(server, backpack);
     registerKBTools(server, backpack);
+    registerSignalTools(server, backpack);
     registerCloudTools(server, backpack);
   }
 

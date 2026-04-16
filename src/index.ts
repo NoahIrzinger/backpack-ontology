@@ -68,6 +68,21 @@ export type {
 } from "./core/document-store.js";
 export { parseWikilinks } from "./core/document-store.js";
 
+// Signals (the third primitive)
+export { SignalStore } from "./core/signal-store.js";
+export type {
+  Signal,
+  SignalFile,
+  SignalConfig,
+  SignalResult,
+  SignalKind,
+  SignalCategory,
+  SignalSeverity,
+  GraphSignalDetector,
+  CrossCuttingSignalDetector,
+} from "./core/signal-types.js";
+export { GRAPH_DETECTORS, CROSS_CUTTING_DETECTORS } from "./core/signal-detectors.js";
+
 // Remote graph registry (subscriptions to graphs hosted at HTTPS URLs)
 export { RemoteRegistry, RemoteRegistryError } from "./core/remote-registry.js";
 export type { RemoteEntry } from "./core/remote-registry.js";

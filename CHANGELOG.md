@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Signals — the third primitive
+- **SignalStore** — backpack-scoped signal detection and persistence. Signals are derived insights computed from graph structure and KB content, persisted to `signals.json` alongside graphs and KB docs.
+- **8 structural detectors** — type ratio imbalance, missing relationships, property completeness, underconnected important nodes, disconnected islands, cross-graph entities, KB-graph gaps, coverage asymmetry. Content-aware descriptions using actual entity names and properties.
+- **Cross-cutting detection** — scans ALL graphs and KB docs in the active backpack. Cross-graph entity detector finds shared entities across domains. KB-graph gap detector finds unlinked documents.
+- **Tag enrichment** — signals automatically tagged with graph names, node types, and KB doc tags.
+- **LLM enrichment flow** — `backpack_signal_detect` outputs evidence context, prompts Claude to rewrite descriptions, `backpack_signal_enrich` persists the contextual intelligence.
+- **MCP tools** — `backpack_signal_detect`, `backpack_signal_list` (filterable by graph/kind/severity/text), `backpack_signal_dismiss`, `backpack_signal_configure` (sensitivity 0.0–1.0), `backpack_signal_enrich`, `backpack_signal_selected` (reads viewer selection via bridge).
+- **Viewer state bridge** — `selectedSignalIds` added to `ViewerState` for MCP access to viewer signal selection.
+
 ### Graph tags
 - **Tags on graph metadata** — freeform `string[]` stored in `metadata.json`, surfaced in `LearningGraphSummary` and `backpack_list` output.
 - **Tag-based resolution** — `resolveOntologyName()` resolves tags to graph names. All 30+ MCP tools support tag lookup (e.g., "f1" finds "formula-one-summary").
