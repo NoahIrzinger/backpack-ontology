@@ -27,6 +27,7 @@ export interface Edge {
 export interface LearningGraphMetadata {
   name: string;
   description: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -70,6 +71,7 @@ export interface EdgeTypeInfo {
 export interface LearningGraphSummary {
   name: string;
   description: string;
+  tags?: string[];
   nodeCount: number;
   edgeCount: number;
   nodeTypes: NodeTypeInfo[];

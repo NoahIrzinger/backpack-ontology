@@ -50,6 +50,7 @@ import type {
 interface GraphMetadataFile {
   name: string;
   description: string;
+  tags?: string[];
   defaultBranch: string;
   schemaVersion: number;
   createdAt: string;
@@ -615,6 +616,7 @@ export class EventSourcedBackend implements StorageBackend {
         summaries.push({
           name: entry,
           description: meta.description,
+          tags: meta.tags ?? [],
           nodeCount: state.nodes.length,
           edgeCount: state.edges.length,
           nodeTypes: Array.from(typeCounts.entries())
@@ -630,7 +632,10 @@ export class EventSourcedBackend implements StorageBackend {
 
   async loadOntology(name: string): Promise<LearningGraphData> {
     const meta = await this.loadMetadata(name);
-    return this.loadBranchSnapshot(name, meta.defaultBranch);
+    const data = await this.loadBranchSnapshot(name, meta.defaultBranch);
+    // Overlay tags from metadata (snapshot doesn't store them)
+    data.metadata.tags = meta.tags ?? [];
+    return data;
   }
 
   /**
@@ -656,12 +661,15 @@ export class EventSourcedBackend implements StorageBackend {
     // Heartbeat: every successful write touches the lock file
     await this.touchLock(name).catch(() => {});
 
+    const tagsChanged = JSON.stringify(data.metadata.tags ?? []) !== JSON.stringify(meta.tags ?? []);
     if (
       data.metadata.name !== meta.name ||
-      data.metadata.description !== meta.description
+      data.metadata.description !== meta.description ||
+      tagsChanged
     ) {
       meta.name = data.metadata.name;
       meta.description = data.metadata.description;
+      meta.tags = data.metadata.tags ?? [];
       meta.updatedAt = new Date().toISOString();
       await this.writeMetadata(name, meta);
     }
@@ -722,6 +730,7 @@ export class EventSourcedBackend implements StorageBackend {
     const meta: GraphMetadataFile = {
       name,
       description,
+      tags: [],
       defaultBranch: DEFAULT_BRANCH,
       schemaVersion: SCHEMA_VERSION,
       createdAt: now,

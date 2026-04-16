@@ -17,7 +17,7 @@ export function registerEdgeTools(
       description:
         "Create a relationship between two items in a learning graph. The type is freeform (e.g. 'WORKS_WITH', 'REPORTS_TO', 'DEPENDS_ON').",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         type: z
           .string()
           .describe(
@@ -61,7 +61,7 @@ export function registerEdgeTools(
       description: "Remove a relationship between two items in a learning graph.",
       annotations: { destructiveHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         edgeId: z.string().describe("ID of the edge to remove"),
       },
     },
@@ -88,7 +88,7 @@ export function registerEdgeTools(
         "Explore connections from an item in a learning graph. Returns related items with their relationships. Use depth > 1 to follow the chain further (max 3).",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         nodeId: z.string().describe("ID of the starting node"),
         edgeType: z
           .string()

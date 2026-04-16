@@ -120,6 +120,52 @@ export function registerOntologyTools(
   );
 
   server.registerTool(
+    "backpack_tags",
+    {
+      title: "Manage Graph Tags",
+      description:
+        "Add or remove tags (aliases/keywords) on a learning graph. " +
+        "Tags let you refer to a graph by a short alias instead of its full name. " +
+        "For example, tag 'formula-one-summary' with 'f1' so you can reference it as 'f1'.",
+      inputSchema: {
+        ontology: z.string().describe("Name or tag of the learning graph"),
+        add: z.array(z.string()).optional().describe("Tags to add"),
+        remove: z.array(z.string()).optional().describe("Tags to remove"),
+      },
+    },
+    async ({ ontology, add, remove }) => {
+      try {
+        trackEvent("tool_call", { tool: "backpack_tags" });
+        const resolved = await backpack.resolveOntologyName(ontology);
+        const current = await backpack.getTags(resolved);
+        let updated = [...current];
+        if (remove?.length) {
+          const removeSet = new Set(remove.map(t => t.toLowerCase().trim()));
+          updated = updated.filter(t => !removeSet.has(t));
+        }
+        if (add?.length) {
+          for (const t of add) {
+            const norm = t.toLowerCase().trim();
+            if (norm && !updated.includes(norm)) updated.push(norm);
+          }
+        }
+        const final = await backpack.setTags(resolved, updated);
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Tags for "${resolved}": ${final.length ? final.join(", ") : "(none)"}`,
+          }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.registerTool(
     "backpack_create",
     {
       title: "Create Learning Graph",

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Graph tags
+- **Tags on graph metadata** — freeform `string[]` stored in `metadata.json`, surfaced in `LearningGraphSummary` and `backpack_list` output.
+- **Tag-based resolution** — `resolveOntologyName()` resolves tags to graph names. All 30+ MCP tools support tag lookup (e.g., "f1" finds "formula-one-summary").
+- **`backpack_tags` MCP tool** — add/remove tags on any graph.
+- Tool `ontology` param descriptions updated to "Name or tag of the learning graph".
+
 ### Sync provenance
 - **Device identity in sync** — `backpack_cloud_sync` MCP tool now sends `X-Backpack-Device-Id` (machine-id), `X-Backpack-Device-Hostname`, and `X-Backpack-Source-Name` (active backpack name) headers with every BPAK sync to the relay.
 

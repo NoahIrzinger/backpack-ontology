@@ -19,7 +19,7 @@ export function registerNodeTools(
         "See what kinds of things are in a learning graph, with counts. Useful for understanding what's there before browsing.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
       },
     },
     async ({ ontology }) => {
@@ -53,7 +53,7 @@ export function registerNodeTools(
         "Browse things in a learning graph with pagination. Returns summaries (id, type, label) — not full details. Use backpack_get_node to get everything about a specific item.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         type: z
           .string()
           .optional()
@@ -103,7 +103,7 @@ export function registerNodeTools(
         "Search the backpack for matching items by text. Searches across all properties in a learning graph (case-insensitive). Returns summaries.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         query: z.string().describe("Text to search for"),
         type: z
           .string()
@@ -147,7 +147,7 @@ export function registerNodeTools(
         "Get the full details of a specific item in a learning graph, including all its properties and relationships.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         nodeId: z.string().describe("ID of the node to retrieve"),
       },
     },
@@ -182,7 +182,7 @@ export function registerNodeTools(
       description:
         "Add a new item to a learning graph in the backpack. The type is freeform — use whatever makes sense for the domain. Properties are key-value pairs. Optional source metadata automatically attaches a pointer back to the original data.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         type: z
           .string()
           .describe(
@@ -247,7 +247,7 @@ export function registerNodeTools(
       description:
         "Update an item's properties in the backpack. New properties are merged with existing ones (existing keys are overwritten, new keys are added, unmentioned keys are kept).",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         nodeId: z.string().describe("ID of the node to update"),
         properties: z
           .record(z.string(), z.unknown())
@@ -281,7 +281,7 @@ export function registerNodeTools(
         "Remove an item and all its relationships from a learning graph in the backpack.",
       annotations: { destructiveHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         nodeId: z.string().describe("ID of the node to remove"),
       },
     },

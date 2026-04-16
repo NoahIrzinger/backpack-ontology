@@ -144,17 +144,72 @@ export class Backpack {
   }
 
   /** Get or load a Graph for an ontology. Caches in memory. */
+  /**
+   * Resolve a name-or-tag to the canonical graph name.
+   * 1. Exact name match (fast path via cache or ontologyExists)
+   * 2. Tag match across all graphs (single match required)
+   * 3. Prefix match on name
+   * Falls through to the original name if nothing matches (let the
+   * caller's storage call produce the "not found" error).
+   */
+  async resolveOntologyName(nameOrTag: string): Promise<string> {
+    // Fast path: exact name (check cache first, then storage)
+    if (this.graphs.has(nameOrTag) || await this.storage.ontologyExists(nameOrTag)) {
+      return nameOrTag;
+    }
+    const all = await this.storage.listOntologies();
+    const needle = nameOrTag.toLowerCase().trim();
+    // Tag match
+    const tagMatches = all.filter(s =>
+      (s.tags ?? []).some(t => t.toLowerCase() === needle),
+    );
+    if (tagMatches.length === 1) return tagMatches[0].name;
+    if (tagMatches.length > 1) {
+      throw new Error(
+        `Ambiguous tag "${nameOrTag}" matches: ${tagMatches.map(m => m.name).join(", ")}. Use the exact graph name.`,
+      );
+    }
+    // Prefix match on name
+    const prefixMatches = all.filter(s => s.name.toLowerCase().startsWith(needle));
+    if (prefixMatches.length === 1) return prefixMatches[0].name;
+    // Fall through — let the caller produce the "not found" error
+    return nameOrTag;
+  }
+
+  private async resolve(name: string): Promise<string> {
+    return this.resolveOntologyName(name);
+  }
+
+  async getTags(name: string): Promise<string[]> {
+    const resolved = await this.resolve(name);
+    const data = await this.storage.loadOntology(resolved);
+    return data.metadata.tags ?? [];
+  }
+
+  async setTags(name: string, tags: string[]): Promise<string[]> {
+    const resolved = await this.resolve(name);
+    const normalized = [...new Set(tags.map(t => t.trim().toLowerCase()).filter(Boolean))];
+    const data = await this.storage.loadOntology(resolved);
+    data.metadata.tags = normalized;
+    await this.storage.saveOntology(resolved, data);
+    // Update in-memory cache if loaded
+    const cached = this.graphs.get(resolved);
+    if (cached) cached.data.metadata.tags = normalized;
+    return normalized;
+  }
+
   private async getGraph(ontologyName: string): Promise<Graph> {
-    let graph = this.graphs.get(ontologyName);
+    const resolvedName = await this.resolve(ontologyName);
+    let graph = this.graphs.get(resolvedName);
     if (!graph) {
-      const data = await this.storage.loadOntology(ontologyName);
+      const data = await this.storage.loadOntology(resolvedName);
       graph = new Graph(data);
-      this.graphs.set(ontologyName, graph);
+      this.graphs.set(resolvedName, graph);
       // Record the version we loaded so persist() can pass it as
       // expectedVersion for optimistic concurrency. Backends that don't
       // support versioning return undefined (no check happens).
-      const version = await this.getVersionIfSupported(ontologyName);
-      if (version !== undefined) this.versions.set(ontologyName, version);
+      const version = await this.getVersionIfSupported(resolvedName);
+      if (version !== undefined) this.versions.set(resolvedName, version);
     }
     return graph;
   }
@@ -242,7 +297,7 @@ export class Backpack {
   }
 
   async loadOntology(name: string): Promise<LearningGraphData> {
-    return this.storage.loadOntology(name);
+    return this.storage.loadOntology(await this.resolve(name));
   }
 
   async createOntology(
@@ -256,9 +311,10 @@ export class Backpack {
   }
 
   async deleteOntology(name: string): Promise<void> {
-    await this.storage.deleteOntology(name);
-    this.graphs.delete(name);
-    this.tokenCache.delete(name);
+    const resolved = await this.resolve(name);
+    await this.storage.deleteOntology(resolved);
+    this.graphs.delete(resolved);
+    this.tokenCache.delete(resolved);
   }
 
   /**
@@ -285,6 +341,7 @@ export class Backpack {
       metadata: {
         name,
         description,
+        tags: data.metadata.tags ?? [],
         createdAt: data.metadata.createdAt || now,
         updatedAt: now,
       },

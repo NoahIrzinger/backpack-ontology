@@ -17,7 +17,7 @@ export function registerBulkTools(
       description:
         "Add multiple items and their relationships to a learning graph in one call. The batch is validated first: errors block the commit, warnings (type drift, duplicates, three-role rule violations) are surfaced in the response. Pass dryRun=true to get the validation result without committing. Edges reference new nodes by array index (0-based) or existing nodes by ID string.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         nodes: z
           .array(
             z.object({
@@ -212,7 +212,7 @@ export function registerBulkTools(
         "Run quality checks on proposed nodes and edges before importing them. Uses a processor pipeline (vagueness filter, relationship threshold, role-rule audit, duplicate detection) to surface errors and warnings. Errors block import; use force=true to override. Returns a quality report with recommendations.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         nodes: z
           .array(
             z.object({
@@ -279,7 +279,7 @@ export function registerBulkTools(
       description:
         "Add multiple edges between existing nodes in a single call. Use this to bulk-add relationships — all source and target node IDs must already exist.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         edges: z
           .array(
             z.object({

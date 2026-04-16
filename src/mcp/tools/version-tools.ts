@@ -16,7 +16,7 @@ export function registerVersionTools(
       description: "List all branches for a learning graph with node/edge counts and which is active.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
       },
     },
     async ({ ontology }) => {
@@ -38,7 +38,7 @@ export function registerVersionTools(
       title: "Create Branch",
       description: "Create a new branch by forking the active branch (or a specified source branch). Use this to create variants of a graph or start fresh while preserving the original.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         name: z.string().describe("Name for the new branch"),
         from: z.string().optional().describe("Source branch to fork from (defaults to active branch)"),
       },
@@ -62,7 +62,7 @@ export function registerVersionTools(
       title: "Switch Branch",
       description: "Switch the active branch for a learning graph. All subsequent operations will read/write this branch.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         name: z.string().describe("Branch to switch to"),
       },
     },
@@ -85,7 +85,7 @@ export function registerVersionTools(
       title: "Delete Branch",
       description: "Delete a branch and its snapshots. Cannot delete the active branch — switch to another branch first.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         name: z.string().describe("Branch to delete"),
       },
     },
@@ -110,7 +110,7 @@ export function registerVersionTools(
       title: "Create Snapshot",
       description: "Save a snapshot of the current branch state. Use this before making risky changes. Snapshots are automatically pruned when the limit is reached.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         label: z.string().optional().describe("Optional label for this snapshot (e.g. 'before restructuring')"),
       },
     },
@@ -134,7 +134,7 @@ export function registerVersionTools(
       description: "List available snapshots for the active branch of a learning graph.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
       },
     },
     async ({ ontology }) => {
@@ -156,7 +156,7 @@ export function registerVersionTools(
       title: "Rollback to Snapshot",
       description: "Restore the active branch to a previous snapshot. The current state is NOT automatically saved — create a snapshot first if you want to preserve it.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         version: z.number().int().describe("Snapshot version number to restore"),
       },
     },
@@ -180,7 +180,7 @@ export function registerVersionTools(
       description: "Compare the current active branch state with a snapshot. Returns nodes and edges that were added or removed.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         version: z.number().int().describe("Snapshot version number to compare against"),
       },
     },
@@ -205,7 +205,7 @@ export function registerVersionTools(
       title: "Save Snippet",
       description: "Save a named subgraph snippet — a subset of nodes and edges from a learning graph. If edgeIds is omitted, all edges between the given nodes are included automatically.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         label: z.string().describe("Human-readable label for the snippet"),
         description: z.string().optional().describe("Optional description of what this snippet captures"),
         nodeIds: z.array(z.string()).describe("Node IDs to include in the snippet"),
@@ -237,7 +237,7 @@ export function registerVersionTools(
       description: "List saved snippets for a learning graph.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
       },
     },
     async ({ ontology }) => {
@@ -260,7 +260,7 @@ export function registerVersionTools(
       description: "Load the full data for a saved snippet, including its nodes and edges.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         snippetId: z.string().describe("ID of the snippet to load"),
       },
     },
@@ -283,7 +283,7 @@ export function registerVersionTools(
       title: "Delete Snippet",
       description: "Delete a saved snippet from a learning graph.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         snippetId: z.string().describe("ID of the snippet to delete"),
       },
     },

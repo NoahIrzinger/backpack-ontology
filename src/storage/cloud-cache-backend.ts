@@ -90,6 +90,7 @@ export class CloudCacheBackend implements StorageBackend {
           summaries.push({
             name: entry.name,
             description: data.metadata?.description || "",
+            tags: data.metadata?.tags ?? [],
             nodeCount: data.nodes?.length ?? 0,
             edgeCount: data.edges?.length ?? 0,
             nodeTypes: Array.from(typeMap.entries()).map(([type, count]) => ({ type, count })),

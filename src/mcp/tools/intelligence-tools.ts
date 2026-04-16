@@ -21,7 +21,7 @@ export function registerIntelligenceTools(
         "Detect structural patterns in a learning graph using deterministic algorithms — no LLM inference. Identifies frequency outliers, dependency risks, cost drivers, governance gaps (missing owners), and contract/reality mismatches. Returns scored, ranked findings with recommended actions.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         patternTypes: z
           .array(
             z.enum([
@@ -82,7 +82,7 @@ export function registerIntelligenceTools(
         "Answer the 7 universal consulting intelligence questions about a learning graph using deterministic pattern detection — no LLM inference required. Questions: top problems by cost/frequency, relationship risks, overloaded people, governance gaps, opportunities, financial picture, disconnected systems. Returns structured findings per question.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
       },
     },
     async ({ ontology }) => {
@@ -260,7 +260,7 @@ export function registerIntelligenceTools(
         "Generate a structured priority briefing from a learning graph. Runs pattern analysis and formats results into an enforced structure: top issues (ranked), quick wins, strategic moves, and watch list. Use this to prepare client-ready synthesis output.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         patternTypes: z
           .array(
             z.enum([
@@ -319,7 +319,7 @@ export function registerIntelligenceTools(
       description:
         "Expand a node by adding related entities and connections. Load the node and its neighbors to understand context, then add new nodes and edges that deepen the knowledge in the specified direction. Returns the current node with its neighbors for context.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         nodeId: z.string().describe("ID of the node to expand"),
         direction: z.string().optional().describe("Direction to expand (e.g. 'historical context', 'related concepts', 'technical details')"),
       },
@@ -357,7 +357,7 @@ export function registerIntelligenceTools(
         "Find the shortest path between two nodes and explain the semantic meaning of their connection. Returns the path with full node/edge details for you to explain.",
       annotations: { readOnlyHint: true },
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         sourceId: z.string().describe("ID of the starting node"),
         targetId: z.string().describe("ID of the ending node"),
       },
@@ -440,7 +440,7 @@ export function registerIntelligenceTools(
       description:
         "Enrich a node with deeper knowledge. Load the node and its context, then add additional properties, related nodes, and connections based on your knowledge or external sources.",
       inputSchema: {
-        ontology: z.string().describe("Name of the learning graph"),
+        ontology: z.string().describe("Name or tag of the learning graph"),
         nodeId: z.string().describe("ID of the node to enrich"),
       },
     },
