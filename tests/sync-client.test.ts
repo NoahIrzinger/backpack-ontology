@@ -209,8 +209,8 @@ describe("SyncClient — push & pull", () => {
     await c.register({ name: "delgate" });
     const result = await c.pull();
     expect(result.pulled).toContain("graph:remote-graph");
-    // Local backend should now know the graph
-    const ontologyDir = path.join(tmpDir, "graphs", "remote-graph");
+    // SyncClient writes to <backpackPath>/<name>/ (graphsDirOverride convention).
+    const ontologyDir = path.join(tmpDir, "remote-graph");
     const stat = await fs.stat(ontologyDir).catch(() => null);
     expect(stat).not.toBeNull();
   });
@@ -243,7 +243,7 @@ describe("SyncClient — conflicts", () => {
 
     // Locally bump the graph's description so local hash differs from tracked.
     const { EventSourcedBackend } = await import("../src/storage/event-sourced-backend.js");
-    const backend = new EventSourcedBackend(tmpDir);
+    const backend = new EventSourcedBackend(undefined, { graphsDirOverride: tmpDir });
     await backend.initialize();
     const data = await backend.loadOntology("g1");
     data.metadata.description = "local-modified";
@@ -270,7 +270,9 @@ describe("parseArtifactId", () => {
 
 async function makeBackendWithGraph(dir: string, name: string): Promise<unknown> {
   const { EventSourcedBackend } = await import("../src/storage/event-sourced-backend.js");
-  const backend = new EventSourcedBackend(dir);
+  // Match the SyncClient convention: registered backpack path IS the
+  // graphs directory (graphsDirOverride).
+  const backend = new EventSourcedBackend(undefined, { graphsDirOverride: dir });
   await backend.initialize();
   await backend.createOntology(name, "test");
   return backend;
