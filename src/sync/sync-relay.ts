@@ -68,20 +68,20 @@ export class SyncRelayClient {
     tags?: string[];
   }): Promise<SyncBackpack> {
     const res = await this.request("POST", "/api/sync/register", input);
-    if (!res.ok) {
+    if (!res.ok || isHtmlResponse(res)) {
       throw await errorFromResponse(res, "register failed");
     }
-    return (await res.json()) as SyncBackpack;
+    return (await safeJson<SyncBackpack>(res, "register"))!;
   }
 
   /** GET /api/sync/backpacks — list the user's sync backpacks. */
   async listBackpacks(): Promise<SyncBackpack[]> {
     const res = await this.request("GET", "/api/sync/backpacks");
-    if (!res.ok) {
+    if (!res.ok || isHtmlResponse(res)) {
       throw await errorFromResponse(res, "listBackpacks failed");
     }
-    const body = (await res.json()) as { backpacks: SyncBackpack[] };
-    return body.backpacks ?? [];
+    const body = await safeJson<{ backpacks: SyncBackpack[] }>(res, "listBackpacks");
+    return body?.backpacks ?? [];
   }
 
   /** GET /api/sync/backpacks/{id}/manifest. */
@@ -90,10 +90,10 @@ export class SyncRelayClient {
       "GET",
       `/api/sync/backpacks/${encodeURIComponent(backpackId)}/manifest`,
     );
-    if (!res.ok) {
+    if (!res.ok || isHtmlResponse(res)) {
       throw await errorFromResponse(res, "manifest failed");
     }
-    return (await res.json()) as SyncManifest;
+    return (await safeJson<SyncManifest>(res, "manifest"))!;
   }
 
   /** GET one artifact. */
@@ -102,10 +102,10 @@ export class SyncRelayClient {
       "GET",
       `/api/sync/backpacks/${encodeURIComponent(backpackId)}/artifacts/${encodeURIComponent(artifactId)}`,
     );
-    if (!res.ok) {
+    if (!res.ok || isHtmlResponse(res)) {
       throw await errorFromResponse(res, "getArtifact failed");
     }
-    return (await res.json()) as SyncArtifact;
+    return (await safeJson<SyncArtifact>(res, "getArtifact"))!;
   }
 
   /**
@@ -136,10 +136,10 @@ export class SyncRelayClient {
         cur?.content_hash ?? "",
       );
     }
-    if (!res.ok) {
+    if (!res.ok || isHtmlResponse(res)) {
       throw await errorFromResponse(res, "putArtifact failed");
     }
-    return (await res.json()) as SyncArtifact;
+    return (await safeJson<SyncArtifact>(res, "putArtifact"))!;
   }
 
   /** DELETE one artifact (tombstones it). */
@@ -169,6 +169,18 @@ export class SyncRelayClient {
 
 async function errorFromResponse(res: Response, prefix: string): Promise<Error> {
   const text = await res.text().catch(() => "");
+  // Special-case the oauth2-proxy redirect-to-IDP HTML response: that means
+  // the bearer token was rejected (typically expired). Surface a clear
+  // message instead of the raw HTML.
+  if (
+    res.status === 302 ||
+    res.headers.get("content-type")?.includes("text/html") ||
+    /^\s*<(!doctype|html|\?xml)/i.test(text)
+  ) {
+    return new Error(
+      `${prefix}: relay token rejected (likely expired). Re-sign-in via the Share extension and try again.`,
+    );
+  }
   let detail = text;
   try {
     const parsed = JSON.parse(text) as { error?: string };
@@ -177,4 +189,18 @@ async function errorFromResponse(res: Response, prefix: string): Promise<Error> 
     // not JSON, keep raw text
   }
   return new Error(`${prefix}: ${res.status} ${res.statusText}${detail ? ` — ${detail}` : ""}`);
+}
+
+function isHtmlResponse(res: Response): boolean {
+  const ct = res.headers.get("content-type") ?? "";
+  return ct.includes("text/html");
+}
+
+async function safeJson<T>(res: Response, op: string): Promise<T | null> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`${op} returned non-JSON body (status ${res.status})`);
+  }
 }
