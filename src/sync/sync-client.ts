@@ -390,7 +390,15 @@ export class SyncClient {
 
   private async getGraphsBackend(): Promise<EventSourcedBackend> {
     if (!this.graphsBackend) {
-      this.graphsBackend = new EventSourcedBackend(this.backpackPath);
+      // The registered backpack path IS the graphs directory itself
+      // (each subdir of it is a graph). This matches the convention used
+      // by the viewer (bin/serve.js: graphsDirOverride = entry.path) and
+      // by the backpack registry (paths point at graphs dirs). Without
+      // this override, EventSourcedBackend would look at <path>/graphs/
+      // which is normally empty for synced backpacks.
+      this.graphsBackend = new EventSourcedBackend(undefined, {
+        graphsDirOverride: this.backpackPath,
+      });
       await this.graphsBackend.initialize();
     }
     return this.graphsBackend;

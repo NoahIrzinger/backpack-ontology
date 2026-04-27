@@ -45,6 +45,7 @@ export {
   getActiveBackpack,
   setActiveBackpack,
   getKBMounts,
+  defaultKBMountPath,
   setKBMounts,
   addKBMount,
   removeKBMount,

@@ -454,17 +454,39 @@ export async function setActiveBackpack(pathOrName: string): Promise<BackpackEnt
 // --- KB mount configuration ---
 
 /**
- * Get the KB mounts for a backpack. If none configured, returns a
- * single default "knowledge-base" mount as a sibling to the graphs directory.
- * e.g., if graphsDir is ~/.local/share/backpack/graphs,
- * the default KB is ~/.local/share/backpack/knowledge-base.
+ * Get the KB mounts for a backpack. If none configured, returns a single
+ * default "knowledge-base" mount placed deterministically based on layout:
+ *
+ * - Default backpack (registered path's basename === "graphs"):
+ *   the path IS the graphs dir. KB is the sibling.
+ *   e.g.  ~/.local/share/backpack/graphs  →  ~/.local/share/backpack/knowledge-base
+ *
+ * - Synced/registered backpack (any other basename):
+ *   the path is the backpack root. KB lives inside it.
+ *   e.g.  /Users/me/Drive/shared_backpacks/delgate
+ *      →  /Users/me/Drive/shared_backpacks/delgate/knowledge-base
+ *
+ * The mount name is always "knowledge-base". Don't let LLMs pick
+ * arbitrary names — that's how we ended up with kb/, kb_local/, etc.
  */
 export async function getKBMounts(backpackPath: string): Promise<KBMountConfig[]> {
   const cfg = await loadRegistry();
   const resolved = path.resolve(backpackPath);
   const mounts = cfg.kb?.[resolved];
   if (mounts && mounts.length > 0) return mounts;
-  return [{ name: "knowledge-base", path: path.join(resolved, "..", "knowledge-base") }];
+  return [{ name: "knowledge-base", path: defaultKBMountPath(resolved) }];
+}
+
+/** Compute the canonical default KB mount path for a backpack. */
+export function defaultKBMountPath(backpackPath: string): string {
+  const resolved = path.resolve(backpackPath);
+  const basename = path.basename(resolved);
+  if (basename === "graphs") {
+    // Default-style backpack: graphs dir + sibling knowledge-base.
+    return path.join(resolved, "..", "knowledge-base");
+  }
+  // Synced/registered-style backpack: knowledge-base lives inside.
+  return path.join(resolved, "knowledge-base");
 }
 
 /** Replace all KB mounts for a backpack. */
