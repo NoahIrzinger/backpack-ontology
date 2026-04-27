@@ -119,3 +119,38 @@ export type {
 // MCP server factory
 export { createMcpServer } from "./mcp/server.js";
 export type { BackpackServerConfig, BackpackLocalConfig, BackpackAppConfig } from "./mcp/server.js";
+
+// Sync Protocol v0.1
+export {
+  SyncClient,
+  SyncRelayClient,
+  SyncVersionConflictError,
+  ARTIFACT_KIND_GRAPH,
+  ARTIFACT_KIND_KB_DOC,
+  SYNC_PROTOCOL_VERSION,
+  hashContent as hashSyncContent,
+  parseArtifactId,
+  readSyncState,
+  writeSyncState,
+  deleteSyncState,
+  isStateInitialized,
+  runStartupSync,
+} from "./sync/index.js";
+export type {
+  SyncClientOptions,
+  RegisterOptions,
+  SyncRelayClientOptions,
+  TokenProvider,
+  ArtifactKind,
+  ArtifactSyncState,
+  BackpackSyncState,
+  ConflictRecord,
+  GraphArtifactContent,
+  KBDocArtifactContent,
+  SyncArtifact,
+  SyncArtifactSummary,
+  SyncBackpack,
+  SyncError,
+  SyncManifest,
+  SyncRunResult,
+} from "./sync/index.js";

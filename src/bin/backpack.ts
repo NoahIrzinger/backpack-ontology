@@ -4,6 +4,7 @@ import { createMcpServer } from "../mcp/server.js";
 import { loadConfig } from "../core/config.js";
 import { removeBackpackHooks } from "../core/hooks.js";
 import { shutdown as shutdownTelemetry } from "../core/telemetry.js";
+import { runStartupSync } from "../sync/auto-sync.js";
 
 async function main() {
   const config = await loadConfig();
@@ -17,6 +18,13 @@ async function main() {
 
   // Log to stderr because stdout is reserved for the MCP protocol
   console.error("Backpack MCP server running on stdio");
+
+  // Background pull for any sync-registered backpacks. Fire-and-forget;
+  // errors go to stderr and never block server startup. Set
+  // BACKPACK_SYNC_AUTOPULL=0 to opt out.
+  if (process.env.BACKPACK_SYNC_AUTOPULL !== "0") {
+    runStartupSync();
+  }
 }
 
 // Graceful shutdown — flush telemetry before exit
