@@ -82,12 +82,73 @@ export class BackpackAppBackend implements StorageBackend {
       edges: [],
     };
 
-    await this.request("/api/graphs", {
+    // Respect the session's active sync_backpack so iOS / web Claude
+    // can switch containers and have new graphs land in the right one.
+    // Falls back to the user's cloud-native default when unset.
+    const target = this.activeSyncBackpackId;
+    const url = target
+      ? `/api/graphs?backpack_id=${encodeURIComponent(target)}`
+      : "/api/graphs";
+    await this.request(url, {
       method: "POST",
       body: JSON.stringify({ name, description, data }),
     });
 
     return data;
+  }
+
+  // --- Sync backpack management (cloud-only) ---
+
+  /**
+   * Active sync_backpack for this session. Cloud-mode tools set it via
+   * backpack_switch so subsequent createOntology / KB writes go to the
+   * right container. Null means "use the user's cloud-native default".
+   */
+  activeSyncBackpackId: string | null = null;
+
+  async listSyncBackpacks(): Promise<Array<{ id: string; name: string; color: string; origin_kind: string; origin_device_id: string | null; origin_device_name?: string }>> {
+    const res = await this.request("/api/sync/backpacks");
+    const body = (await res.json()) as { backpacks?: unknown[] };
+    return (body.backpacks ?? []) as Array<{ id: string; name: string; color: string; origin_kind: string; origin_device_id: string | null; origin_device_name?: string }>;
+  }
+
+  async registerSyncBackpack(name: string, color?: string, tags?: string[]): Promise<{ id: string; name: string }> {
+    const res = await this.request("/api/sync/register", {
+      method: "POST",
+      body: JSON.stringify({ name, color, tags }),
+    });
+    return (await res.json()) as { id: string; name: string };
+  }
+
+  async deleteSyncBackpack(id: string): Promise<void> {
+    await this.request(`/api/sync/backpacks/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  async renameSyncBackpack(id: string, fields: { name?: string; color?: string; tags?: string[] }): Promise<{ id: string; name: string }> {
+    const res = await this.request(`/api/sync/backpacks/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(fields),
+    });
+    return (await res.json()) as { id: string; name: string };
+  }
+
+  async getSyncBackpackManifest(id: string): Promise<unknown> {
+    const res = await this.request(`/api/sync/backpacks/${encodeURIComponent(id)}/manifest`);
+    return await res.json();
+  }
+
+  async moveGraphToBackpack(targetId: string, graphName: string): Promise<void> {
+    await this.request(`/api/sync/backpacks/${encodeURIComponent(targetId)}/move-graph`, {
+      method: "POST",
+      body: JSON.stringify({ name: graphName }),
+    });
+  }
+
+  async moveKBToBackpack(targetId: string, docId: string): Promise<void> {
+    await this.request(`/api/sync/backpacks/${encodeURIComponent(targetId)}/move-kb`, {
+      method: "POST",
+      body: JSON.stringify({ id: docId }),
+    });
   }
 
   async renameOntology(oldName: string, newName: string): Promise<void> {
