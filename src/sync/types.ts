@@ -99,6 +99,13 @@ export interface SyncRunResult {
   deleted_local: string[];
   deleted_remote: string[];
   conflicts: ConflictRecord[];
+  /**
+   * Artifacts the client deliberately did not act on. Today: relay
+   * manifest referenced an artifact that 404'd on download (stale
+   * manifest). The next sync run picks them up automatically.
+   * Surfaced so callers can warn users without crashing the run.
+   */
+  skipped: SkippedRecord[];
   errors: SyncError[];
 }
 
@@ -106,6 +113,11 @@ export interface ConflictRecord {
   artifact_id: string;
   conflict_path: string;
   remote_version: number;
+}
+
+export interface SkippedRecord {
+  artifact_id: string;
+  reason: "remote-missing" | string;
 }
 
 export interface SyncError {

@@ -285,6 +285,13 @@ export class SyncClient {
       // Remote newer than tracked AND local has not changed → pull
       if (remote.version > tracked.last_synced_version && !localChanged) {
         const fetched = await this.relay.getArtifact(state.backpack_id, remote.artifact_id);
+        if (!fetched) {
+          // Relay manifest is stale (artifact disappeared between
+          // manifest fetch and download). Skip and let the next sync
+          // pick up the fresh manifest. Don't crash the run.
+          result.skipped.push({ artifact_id: remote.artifact_id, reason: "remote-missing" });
+          continue;
+        }
         await this.writeLocalArtifact(remote.artifact_id, fetched.content);
         state.artifacts[remote.artifact_id] = {
           version: remote.version,
@@ -304,6 +311,12 @@ export class SyncClient {
       if (localChanged && remote.version > tracked.last_synced_version) {
         const conflictPath = await this.writeConflictFile(remote.artifact_id, local.content);
         const fetched = await this.relay.getArtifact(state.backpack_id, remote.artifact_id);
+        if (!fetched) {
+          // Manifest said remote changed, but the artifact is gone.
+          // Treat the local copy as authoritative for this run.
+          result.skipped.push({ artifact_id: remote.artifact_id, reason: "remote-missing" });
+          continue;
+        }
         await this.writeLocalArtifact(remote.artifact_id, fetched.content);
         state.artifacts[remote.artifact_id] = {
           version: remote.version,
@@ -360,6 +373,7 @@ export class SyncClient {
       deleted_local: [...a.deleted_local, ...b.deleted_local],
       deleted_remote: [...a.deleted_remote, ...b.deleted_remote],
       conflicts: [...a.conflicts, ...b.conflicts],
+      skipped: [...(a.skipped ?? []), ...(b.skipped ?? [])],
       errors: [...a.errors, ...b.errors],
     };
   }
@@ -566,6 +580,12 @@ export class SyncClient {
     // relay wins canonical, local preserved as a conflict file for manual reconciliation.
     const conflictPath = await this.writeConflictFile(artifactId, localContent);
     const fetched = await this.relay.getArtifact(state.backpack_id, artifactId);
+    if (!fetched) {
+      // Server reported a conflict on PUT but now claims the artifact
+      // doesn't exist. Treat as transient — keep local, mark skipped.
+      result.skipped.push({ artifact_id: artifactId, reason: "remote-missing" });
+      return;
+    }
     await this.writeLocalArtifact(artifactId, fetched.content);
     state.artifacts[artifactId] = {
       version: fetched.version,
@@ -641,6 +661,7 @@ function newResult(): SyncRunResult {
     deleted_local: [],
     deleted_remote: [],
     conflicts: [],
+    skipped: [],
     errors: [],
   };
 }

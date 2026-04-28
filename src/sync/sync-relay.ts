@@ -96,12 +96,20 @@ export class SyncRelayClient {
     return (await safeJson<SyncManifest>(res, "manifest"))!;
   }
 
-  /** GET one artifact. */
-  async getArtifact(backpackId: string, artifactId: string): Promise<SyncArtifact> {
+  /**
+   * GET one artifact. Returns null if the artifact is missing on the
+   * relay (404). Callers must treat null as "manifest is stale, skip
+   * this entry"; throwing on every transient inconsistency would break
+   * the whole sync. Other non-OK responses still throw.
+   */
+  async getArtifact(backpackId: string, artifactId: string): Promise<SyncArtifact | null> {
     const res = await this.request(
       "GET",
       `/api/sync/backpacks/${encodeURIComponent(backpackId)}/artifacts/${encodeURIComponent(artifactId)}`,
     );
+    if (res.status === 404) {
+      return null;
+    }
     if (!res.ok || isHtmlResponse(res)) {
       throw await errorFromResponse(res, "getArtifact failed");
     }
