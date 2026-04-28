@@ -24,8 +24,9 @@
     "dev": "tsx src/bin/backpack.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build",
-    "preversion": "npm run build && npm test",
+    "check:private-data": "node scripts/check-private-data.mjs",
+    "prepublishOnly": "npm run check:private-data && npm run build",
+    "preversion": "npm run check:private-data && npm run build && npm test",
     "release:patch": "npm version patch && git push && git push --tags",
     "release:minor": "npm version minor && git push && git push --tags",
     "release:major": "npm version major && git push && git push --tags"

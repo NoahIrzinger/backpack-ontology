@@ -72,7 +72,7 @@ Stored alongside the backpack on disk in `backpack.json`:
 ```json
 {
   "backpack_id": "550e8400-e29b-41d4-a716-446655440000",
-  "name": "delgate",
+  "name": "my-graph",
   "color": "#7c3aed",
   "tags": ["client", "consulting"],
   "sync": {
@@ -90,7 +90,7 @@ Stored in `<backpack>/.sync/state.json`:
 ```json
 {
   "artifacts": {
-    "graph:delgate-architecture": {
+    "graph:my-graph-architecture": {
       "version": 12,
       "content_hash": "sha256:...",
       "last_synced_version": 12,
@@ -251,8 +251,8 @@ Detected by the PUT-409 path or by manifest diff before push.
 
 The relay's version wins for the synced state. The local version is preserved as a conflict file beside the original:
 
-- `delgate/graphs/delgate-architecture.conflict-2026-04-27T15-30-12.json`
-- `delgate/_documents/billing-summary.conflict-2026-04-27T15-30-12.md`
+- `my-graph/graphs/my-graph-architecture.conflict-2026-04-27T15-30-12.json`
+- `my-graph/_documents/billing-summary.conflict-2026-04-27T15-30-12.md`
 
 After writing the conflict file, the client pulls the relay's version into the canonical location and updates `last_synced_version` accordingly. The user reconciles the conflict file manually and saves the merged result, which then bumps the version and pushes normally.
 
@@ -280,7 +280,7 @@ These extensions are deliberately deferred. The v0.1 protocol must not preclude 
 
 A backpack gets a `members` list. Each artifact gets an `author_user_id`. Each user owns their own artifacts within the shared backpack. A user's writes never overwrite another user's artifact.
 
-Concretely: when user A and user B are members of the same backpack, they each push their own `graph:delgate-architecture-{user_id}` rather than competing for `graph:delgate-architecture`. The synthesis layer (out of protocol scope) reads across all users' artifacts and produces unified views.
+Concretely: when user A and user B are members of the same backpack, they each push their own `graph:my-graph-architecture-{user_id}` rather than competing for `graph:my-graph-architecture`. The synthesis layer (out of protocol scope) reads across all users' artifacts and produces unified views.
 
 This extension reuses every primitive in v0.1 unchanged. It only adds `author_user_id` and namespacing rules.
 

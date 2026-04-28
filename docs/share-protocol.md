@@ -40,7 +40,7 @@ A shareable backpack is packaged into an envelope — a single binary blob with 
 {
   "format": "plaintext" | "age-v1",
   "created_at": "2026-04-11T12:00:00Z",
-  "backpack_name": "chester",
+  "backpack_name": "my-graph",
   "graph_count": 3,
   "checksum": "sha256:<hex>",
   "metadata": {}
@@ -176,7 +176,7 @@ Non-sensitive metadata about the share (does NOT return envelope content).
 {
   "token": "abc123def456",
   "format": "age-v1",
-  "backpack_name": "chester",
+  "backpack_name": "my-graph",
   "created_at": "2026-04-11T12:00:00Z",
   "expires_at": "2026-04-18T12:00:00Z",
   "view_count": 3,
@@ -194,7 +194,7 @@ List the authenticated user's shares.
   "shares": [
     {
       "token": "abc123def456",
-      "backpack_name": "chester",
+      "backpack_name": "my-graph",
       "format": "age-v1",
       "created_at": "2026-04-11T12:00:00Z",
       "expires_at": "2026-04-18T12:00:00Z",
@@ -231,19 +231,19 @@ If the `format` is unrecognized, the viewer shows: "This backpack uses an unsupp
 For fully offline sharing (no relay), the OSS CLI can output the envelope as a local file:
 
 ```
-backpack share --out chester.bpak [--encrypt]
+backpack share --out my-graph.bpak [--encrypt]
 ```
 
 The recipient opens it in the local viewer or CLI:
 
 ```
-backpack open chester.bpak --key {key}
+backpack open my-graph.bpak --key {key}
 ```
 
 Or imports it into their local backpack:
 
 ```
-backpack import chester.bpak --key {key}
+backpack import my-graph.bpak --key {key}
 ```
 
 The `.bpak` extension is the conventional file extension for backpack envelopes.
