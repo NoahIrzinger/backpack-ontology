@@ -16,7 +16,7 @@ export function registerSignalTools(
     {
       title: "List Signals",
       description:
-        "List active signals for the current backpack. Signals are derived insights — concentration risks, bridge nodes, orphan clusters, cross-graph entities — computed from graph structure and KB content. Filter by graph, kind, severity, or text search. Search 'chester' to find signals touching Chester across all graphs.",
+        "List active signals for the current backpack. Signals are derived insights — concentration risks, bridge nodes, orphan clusters, cross-graph entities — computed from graph structure and KB content. Filter by graph, kind, severity, or text search. Search 'my-graph' to find signals touching Chester across all graphs.",
       inputSchema: {
         graph: z.string().optional().describe("Filter to signals involving this graph"),
         kind: z.string().optional().describe("Filter by signal kind (e.g. 'concentration_risk', 'bridge_node', 'cross_graph_entity')"),

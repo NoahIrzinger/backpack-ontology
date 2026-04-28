@@ -1,6 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.8.1 (2026-04-28)
+
+Republish of 0.8.0 with comments and example data scrubbed from source. No functional or API changes from 0.8.0; users should pin >= 0.8.1.
+
+## 0.8.0 (2026-04-28)
+
+### `bp` — a standalone CLI for Backpack
+A full Unix/gh-style command-line interface ships in this release. `npm i -g backpack-ontology` puts `bp` on PATH alongside the existing entry points.
+
+- **Daily-driver verbs** — `bp ls`, `bp cat <name>`, `bp show <name>`, `bp open <name>`, `bp search <query>`, `bp rm <name>`, `bp mv <old> <new>`. Unix muscle memory for the common case.
+- **Canonical (gh/kubectl-style) form** — `bp graphs list/get/describe/create/delete/rename/apply/edit/move`, `bp containers list/create/rename/delete`, `bp kbs list/get/create/edit/delete/move`. Plural and singular both accepted.
+- **Auth** — `bp login` (browser OAuth, shared token file with the viewer), `bp logout`, `bp whoami`. `assertSafeRelay()` refuses Bearer-on-plaintext-HTTP unless `BACKPACK_INSECURE_RELAY=1`.
+- **Context** — `bp where`, `bp use <name>` (fuzzy-matched, did-you-mean on typos, ambiguous-bare-name detection). State persisted to `~/.config/backpack/cli-context.json` so cross-invocation scope is sticky.
+- **Cloud admin** — `bp containers create/rename/delete` and `bp graphs/kbs move --to <container>`. Container-delete prompt surfaces graph/KB counts so the user knows the stakes before typing `y`.
+- **Mutations are atomic** — new `Backpack.saveOntologyData(name, data)` replaces graph contents in place via the event-sourced store. `bp graphs apply` and `bp graphs edit` no longer destroy snapshots, branches, or snippets.
+- **`$EDITOR` round-trip** — `bp graphs edit <name>` and `bp kbs edit <id>` open in `$EDITOR` (multi-arg values like `code --wait` work). Per-user tmpdir with mode 0600. Structural canonical-key compare so vim's trailing-newline doesn't trigger needless rewrites.
+- **`bp init [path]`** — register a backpack root and switch the active context to it.
+- **`bp doctor`** — auth, connectivity, version skew checks. `--json` for machine-readable output.
+- **Output formats** — default human (free to evolve), `--json`/`--yaml`/`--names` are the stable contract for scripting. `--wide` for extra columns. `--no-color` (also honors `NO_COLOR`).
+- **Tab completion** — `bp completion <bash|zsh|fish>` prints the appropriate script. Subcommand-aware; `bp use <tab>` lists registered local backpacks.
+- **`ops/` layer** — `src/ops/auth.ts` / `context.ts` / `graphs.ts` / `containers.ts` / `kb.ts`. Single source of truth for both the CLI and MCP tools so behavior stays aligned.
+- **6 new MCP tools for cloud-container management** — `backpack_cloud_containers`, `backpack_cloud_container_create/_rename/_delete`, `backpack_cloud_move_graph`, `backpack_cloud_move_kb`. Local counterparts of the cloud-sidecar tools.
 
 ### Signals — the third primitive
 - **SignalStore** — backpack-scoped signal detection and persistence. Signals are derived insights computed from graph structure and KB content, persisted to `signals.json` alongside graphs and KB docs.
@@ -19,6 +40,9 @@
 
 ### Sync provenance
 - **Device identity in sync** — `backpack_cloud_sync` MCP tool now sends `X-Backpack-Device-Id` (machine-id), `X-Backpack-Device-Hostname`, and `X-Backpack-Source-Name` (active backpack name) headers with every BPAK sync to the relay.
+
+### Tests
+- 535 tests passing — covers the full bp CLI surface, parser/output/colors, ops layer (with mocked fetch for cloud paths), context resolution, auth/JWT decode hardening, YAML scalar quoting, HTTPS-only enforcement.
 
 ## 0.7.4
 

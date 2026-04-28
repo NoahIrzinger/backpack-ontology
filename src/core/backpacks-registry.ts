@@ -463,8 +463,8 @@ export async function setActiveBackpack(pathOrName: string): Promise<BackpackEnt
  *
  * - Synced/registered backpack (any other basename):
  *   the path is the backpack root. KB lives inside it.
- *   e.g.  /Users/me/Drive/shared_backpacks/delgate
- *      →  /Users/me/Drive/shared_backpacks/delgate/knowledge-base
+ *   e.g.  /Users/me/Drive/shared_backpacks/my-graph
+ *      →  /Users/me/Drive/shared_backpacks/my-graph/knowledge-base
  *
  * The mount name is always "knowledge-base". Don't let LLMs pick
  * arbitrary names — that's how we ended up with kb/, kb_local/, etc.

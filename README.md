@@ -341,6 +341,129 @@ Claude always adds this metadata automatically. You never need to think about it
 | `npx -p backpack-ontology@latest backpack-sync` | Upload local learning graphs to Backpack App |
 | `npx backpack-viewer@latest` | Open the graph visualizer (http://localhost:5173). Always include `@latest` — `npx backpack-viewer` without the version suffix reuses a cached older version. |
 | `npx -p backpack-ontology@latest backpack-init` | Remove any leftover Backpack hooks from `.claude/settings.json` |
+| `bp` | The standalone `bp` CLI — see below |
+
+### The `bp` CLI
+
+`bp` is a standalone command-line interface for Backpack — the same kind of tool you reach for when you want to script against your knowledge graph, run a quick query, or pipe graph data into `jq`. Style is deliberately Unix-flavored (`bp ls`, `bp cat`, `bp rm`, `bp mv`) with a `gh`/`kubectl`-style canonical form for power users (`bp graphs list`, `bp containers create`).
+
+Install (it ships in the same package as the MCP server):
+
+```bash
+npm install -g backpack-ontology
+bp                       # prints a hint card with the most-used commands
+bp help                  # full reference
+bp completion zsh        # tab completion for your shell (also: bash, fish)
+```
+
+#### Quick tour
+
+```bash
+# Where am I? Who am I?
+bp where                                  # current scope (local backpack or cloud container + identity)
+bp whoami                                  # signed-in email
+bp doctor                                  # auth, connectivity, version skew checks
+
+# Sign in to Backpack App (shares the token with the viewer)
+bp login
+
+# Switch contexts — fuzzy matched, did-you-mean on typos
+bp use                                    # list available contexts
+bp use cloud:my-container                     # switch to a cloud container
+bp use local:work                         # switch to a local backpack
+
+# List graphs in the active scope
+bp ls                                     # default tabular
+bp ls --json | jq '.graphs[] | .name'     # machine-readable
+bp ls --names                             # names only, one per line
+bp ls containers                          # cloud sync_backpacks
+bp ls kbs                                 # knowledge-base docs
+
+# Read graph data
+bp cat agent-capabilities > graph.json  # JSON to stdout
+bp cat agent-capabilities | jq '.nodes | length'
+bp show agent-capabilities              # human-friendly summary + type histogram
+bp open agent-capabilities              # launch the viewer
+
+# Search across visible graphs
+bp search "transformer"
+bp search "Sarah Chen" --names
+bp search "pgx" --max-graphs 100          # raise the fan-out cap
+
+# Mutations — graphs
+bp graphs create my-new-graph --description "scratchpad"
+bp graphs apply -f exported.json          # idempotent upsert from a file
+bp graphs edit my-new-graph               # opens in $EDITOR; structural-no-op detected
+bp graphs rename old new                  # or: bp mv old new
+bp graphs delete old                      # or: bp rm old   (asks for confirmation)
+bp rm old --yes                           # skip the confirm
+
+# KB documents
+bp kbs list
+bp kbs get my-doc      # body to stdout
+bp kbs create -f notes.md --tags=alpha,beta
+bp kbs edit my-doc
+bp kbs delete my-doc
+
+# Cloud admin (containers / sync_backpacks)
+bp containers list
+bp containers create client-acme --color "#7c3aed" --tags=client
+bp containers rename client-acme client-acme-renamed
+bp containers delete client-acme-renamed   # refuses if non-empty
+bp graphs move some-graph --to client-acme
+bp kbs move doc-id --to client-acme
+
+# Initialize a new local backpack root
+mkdir -p ~/work-backpack && cd ~/work-backpack
+bp init                                   # registers and switches to it
+```
+
+#### Output formats
+
+Pick one:
+
+| Flag | Output | Stable contract? |
+|---|---|---|
+| (default) | human-friendly table with colors, narrows on small terminals | no — free to evolve |
+| `--json` | full JSON | **yes** — script against this |
+| `--yaml` | YAML | yes |
+| `--names` | one name per line | yes |
+| `--wide` | every column (still human) | no |
+| `--no-color` | strip ANSI codes (also honors `NO_COLOR=1`) | n/a |
+
+Scripts should always pipe `--json` to `jq` or use `--names`. The default human view is allowed to change between releases.
+
+#### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | success |
+| 1 | failure (any kind — auth, validation, network, server error) |
+| 130 | user-interrupted ($EDITOR session aborted with Ctrl-C) |
+
+Destructive verbs (`rm`, `mv`, `containers delete`, `kbs delete`) prompt for confirmation in a TTY and refuse in non-TTY contexts unless you pass `-y` / `--yes`.
+
+#### Context model
+
+A `bp` "context" is one of:
+
+* `local:<backpack-name>` — a directory of learning graphs on your machine
+* `cloud:<container-name>` — a cloud sync_backpack on Backpack App
+
+`bp where` shows your current context. `bp use <name>` switches it (fuzzy-matched against the suffix; `bp use projects` works as long as it's unambiguous, otherwise the CLI tells you the candidates and asks you to pick the full `local:foo` or `cloud:foo`).
+
+#### Auth
+
+`bp login` runs the OAuth flow against Backpack App. The token is stored in `~/.config/backpack/extensions/share/settings.json` — the same file the viewer's Sign In button writes to, so signing in once works for both the CLI and the viewer. `bp logout` clears every known token location and is loud if any clear fails (so you don't think you're signed out when you aren't).
+
+#### Configuration
+
+| Variable | Effect |
+|---|---|
+| `BACKPACK_APP_URL` | Override the relay endpoint (default: `https://app.backpackontology.com`) |
+| `BACKPACK_INSECURE_RELAY=1` | Allow plaintext HTTP for the relay (only for local dev — non-localhost HTTP is refused by default) |
+| `EDITOR` / `VISUAL` | Used by `bp graphs edit` / `bp kbs edit`. Multi-arg values like `code --wait` work. |
+| `NO_COLOR=1` | Disable ANSI colors |
 
 ### Multiple backpacks
 

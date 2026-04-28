@@ -39,7 +39,7 @@ function fakeRelay(): {
     backpack: {
       id: "11111111-1111-4111-8111-111111111111",
       owner_user_id: "owner",
-      name: "delgate",
+      name: "my-graph",
       color: "#7c3aed",
       tags: [],
       metadata_version: 1,
@@ -143,7 +143,7 @@ describe("SyncClient — register", () => {
   it("creates state file with relay backpack id", async () => {
     const relay = fakeRelay();
     const c = new SyncClient({ backpackPath: tmpDir, relay: relay.client });
-    const state = await c.register({ name: "delgate" });
+    const state = await c.register({ name: "my-graph" });
     expect(state.backpack_id).toBe(relay.state.backpack.id);
     const persisted = await readSyncState(tmpDir);
     expect(persisted?.backpack_id).toBe(relay.state.backpack.id);
@@ -152,8 +152,8 @@ describe("SyncClient — register", () => {
   it("is idempotent across calls", async () => {
     const relay = fakeRelay();
     const c = new SyncClient({ backpackPath: tmpDir, relay: relay.client });
-    await c.register({ name: "delgate" });
-    await c.register({ name: "delgate" });
+    await c.register({ name: "my-graph" });
+    await c.register({ name: "my-graph" });
     expect(relay.fetchMock).toHaveBeenCalled();
   });
 });
@@ -163,7 +163,7 @@ describe("SyncClient — push & pull", () => {
     const relay = fakeRelay();
     const backend = await makeBackendWithGraph(tmpDir, "g1");
     const c = new SyncClient({ backpackPath: tmpDir, relay: relay.client });
-    await c.register({ name: "delgate" });
+    await c.register({ name: "my-graph" });
 
     const result = await c.push();
     expect(result.pushed).toContain(`${ARTIFACT_KIND_GRAPH}:g1`);
@@ -175,7 +175,7 @@ describe("SyncClient — push & pull", () => {
     const relay = fakeRelay();
     await makeBackendWithGraph(tmpDir, "g1");
     const c = new SyncClient({ backpackPath: tmpDir, relay: relay.client });
-    await c.register({ name: "delgate" });
+    await c.register({ name: "my-graph" });
     await c.push();
     const result = await c.push();
     expect(result.pushed).toEqual([]);
@@ -206,7 +206,7 @@ describe("SyncClient — push & pull", () => {
     });
 
     const c = new SyncClient({ backpackPath: tmpDir, relay: relay.client });
-    await c.register({ name: "delgate" });
+    await c.register({ name: "my-graph" });
     const result = await c.pull();
     expect(result.pulled).toContain("graph:remote-graph");
     // SyncClient writes to <backpackPath>/<name>/ (graphsDirOverride convention).
@@ -221,7 +221,7 @@ describe("SyncClient — conflicts", () => {
     const relay = fakeRelay();
     await makeBackendWithGraph(tmpDir, "g1");
     const c = new SyncClient({ backpackPath: tmpDir, relay: relay.client });
-    await c.register({ name: "delgate" });
+    await c.register({ name: "my-graph" });
     await c.push();
 
     // Simulate remote advancing

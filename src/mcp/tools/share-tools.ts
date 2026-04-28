@@ -222,7 +222,7 @@ export function registerShareTools(
         "(email, USB, Signal). Recipient decrypts with the secret key.",
       inputSchema: {
         name: z.string().describe("Name of the backpack to export"),
-        output: z.string().describe("Output file path (e.g., ./chester.bpak)"),
+        output: z.string().describe("Output file path (e.g., ./my-graph.bpak)"),
         encrypted: z
           .boolean()
           .default(true)
