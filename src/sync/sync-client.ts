@@ -117,6 +117,36 @@ export class SyncClient {
     return state;
   }
 
+  /**
+   * Clone an existing remote backpack into this (empty) local folder.
+   *
+   * Use case: a cloud-native backpack the user wants on disk for the
+   * first time on this machine, or pulling a sync_backpack that was
+   * synced from a different device. Composes the existing register +
+   * pull primitives:
+   *
+   *   1. register({ backpackId: remoteId, name }) — attaches local
+   *      sync state to the existing remote id (the relay sees a
+   *      provided id and returns the existing record, so this does
+   *      NOT create a duplicate cloud container).
+   *   2. pull() — downloads every artifact from the remote into the
+   *      local folder.
+   *
+   * Caller is responsible for ensuring the local folder exists and is
+   * empty (or at least free of conflicting artifacts). Returns the
+   * pull result so the caller can report counts.
+   */
+  async clone(remoteBackpackId: string, name: string, color?: string, tags?: string[]): Promise<{ state: BackpackSyncState; pull: SyncRunResult }> {
+    const state = await this.register({
+      backpackId: remoteBackpackId,
+      name,
+      color,
+      tags: tags ?? [],
+    });
+    const pull = await this.pull();
+    return { state, pull };
+  }
+
   /** Unregister: delete server-side and local sync state. */
   async unregister(): Promise<void> {
     const state = await this.getState();
