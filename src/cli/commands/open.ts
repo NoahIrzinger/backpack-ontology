@@ -7,31 +7,35 @@ import { red, dim, green, yellow } from "../colors.js";
 const VIEWER_URL = process.env.BACKPACK_VIEWER_URL || "http://127.0.0.1:5173";
 async function syncViewerContext(): Promise<{
     ok: boolean;
-    switchName: string | null;
+    label: string | null;
+    container?: string;
     error?: string;
 }> {
     const ctx = await getContext();
     let switchName: string | null = null;
+    let label: string | null = null;
+    let container: string | undefined;
     if (ctx.source === "local" && ctx.backpackPath) {
         switchName = path.basename(ctx.backpackPath);
+        label = `local:${switchName}`;
     }
     else if (ctx.source === "cloud") {
-        switchName = ctx.cloudContainer ? `__cloud__:${ctx.cloudContainer}` : "__cloud__";
+        switchName = "__cloud__";
+        label = ctx.cloudContainer ? `cloud:${ctx.cloudContainer}` : "cloud";
+        container = ctx.cloudContainer;
     }
-    if (!switchName)
-        return { ok: false, switchName: null, error: "no active context" };
+    if (!switchName) return { ok: false, label: null, error: "no active context" };
     try {
         const res = await fetch(`${VIEWER_URL}/api/backpacks/switch`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name: switchName }),
         });
-        if (!res.ok)
-            return { ok: false, switchName, error: `viewer returned HTTP ${res.status}` };
-        return { ok: true, switchName };
+        if (!res.ok) return { ok: false, label, container, error: `viewer returned HTTP ${res.status}` };
+        return { ok: true, label, container };
     }
     catch (err) {
-        return { ok: false, switchName, error: (err as Error).message };
+        return { ok: false, label, container, error: (err as Error).message };
     }
 }
 export async function runOpen(args: ParsedArgs): Promise<number> {
@@ -53,7 +57,10 @@ export async function runOpen(args: ParsedArgs): Promise<number> {
     }
     const sync = await syncViewerContext();
     if (sync.ok) {
-        process.stdout.write(`${dim("·")} viewer switched to ${sync.switchName}\n`);
+        process.stdout.write(`${dim("·")} viewer switched to ${sync.label}\n`);
+        if (sync.container) {
+            process.stdout.write(dim(`  (cloud container filter is set client-side — click "${sync.container}" in the picker if the viewer doesn't already show it)\n`));
+        }
     }
     else if (sync.error?.includes("ECONNREFUSED") || sync.error?.includes("fetch failed")) {
         process.stdout.write(`${yellow("!")} viewer doesn't appear to be running at ${VIEWER_URL} — opening anyway.\n`);
@@ -62,7 +69,8 @@ export async function runOpen(args: ParsedArgs): Promise<number> {
     else if (sync.error) {
         process.stdout.write(`${yellow("!")} couldn't sync viewer context (${sync.error}) — opening anyway.\n`);
     }
-    const url = `${VIEWER_URL}/#${encodeURIComponent(name)}`;
+    const containerHash = sync.container ? `&container=${encodeURIComponent(sync.container)}` : "";
+    const url = `${VIEWER_URL}/#${encodeURIComponent(name)}${containerHash}`;
     process.stdout.write(`${green("→")} ${url}\n`);
     let cmd: string;
     let cmdArgs: string[];

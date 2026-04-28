@@ -85,8 +85,11 @@ complete -F _bp_completions bp
 `;
 }
 function zshScript(): string {
-    return `# bp zsh completion. install with:
+    return `#compdef bp
+# bp zsh completion. install with one of:
 #   bp completion zsh > "\${fpath[1]}/_bp"
+#   bp completion zsh > ~/.zsh/completions/_bp
+# then ensure ~/.zsh/completions is on fpath BEFORE compinit runs in your zshrc.
 
 _bp_local_backpacks() {
   local f="\${XDG_CONFIG_HOME:-\$HOME/.config}/backpack/backpacks.json"
@@ -125,7 +128,8 @@ _bp() {
       ;;
   esac
 }
-compdef _bp bp
+
+_bp "$@"
 `;
 }
 function fishScript(): string {
