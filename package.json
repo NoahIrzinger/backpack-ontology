@@ -16,6 +16,16 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./connector": {
+      "import": "./dist/connector.js",
+      "types": "./dist/connector.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
