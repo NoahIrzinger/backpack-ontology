@@ -636,16 +636,140 @@ export const coverageAsymmetryDetector: CrossCuttingSignalDetector = {
 
 // --- Registry ---
 
+export const staleContentDetector: GraphSignalDetector = {
+  kind: "stale_content",
+  category: "structural",
+  detect({ data, graphName }, _sensitivity, params) {
+    const staleDays = (params?.staleDays as number) ?? 90;
+    const cutoff = Date.now() - staleDays * 24 * 60 * 60 * 1000;
+
+    const stale = data.nodes.filter((n) => {
+      const d = n.properties.source_date ?? n.properties.sourceDate ?? n.updatedAt;
+      if (!d) return false;
+      return new Date(String(d)).getTime() < cutoff;
+    });
+
+    if (stale.length < 3) return [];
+
+    const bySource = new Map<string, typeof stale>();
+    for (const n of stale) {
+      const src = String(n.properties.source ?? "unknown");
+      const domain = (() => { try { return src.startsWith("http") ? new URL(src).hostname || src : src; } catch { return src; } })();
+      if (!bySource.has(domain)) bySource.set(domain, []);
+      bySource.get(domain)!.push(n);
+    }
+
+    const signals: Signal[] = [];
+    for (const [domain, nodes] of bySource) {
+      if (nodes.length < 3) continue;
+      const oldest = nodes.reduce((a, b) => {
+        const da = new Date(String(a.properties.source_date ?? a.updatedAt)).getTime();
+        const db = new Date(String(b.properties.source_date ?? b.updatedAt)).getTime();
+        return da < db ? a : b;
+      });
+      const age = Math.floor((Date.now() - new Date(String(oldest.properties.source_date ?? oldest.updatedAt)).getTime()) / (24 * 60 * 60 * 1000));
+      signals.push({
+        id: makeSignalId("stale_content", graphName, domain),
+        kind: "stale_content",
+        category: "structural",
+        severity: age > staleDays * 2 ? "high" : "medium",
+        title: `${nodes.length} nodes from ${domain} are ${age}+ days old`,
+        description: `${nodes.length} nodes sourced from ${domain} haven't been updated in ${age} days. The underlying content may have changed. Consider re-mining this source to refresh the graph.`,
+        evidenceNodeIds: nodes.map((n) => n.id),
+        evidenceDocIds: [],
+        graphNames: [graphName],
+        score: nodes.length * (age / staleDays),
+        tags: [],
+      });
+    }
+    return signals;
+  },
+};
+
+export const missingProvenanceDetector: GraphSignalDetector = {
+  kind: "missing_provenance",
+  category: "structural",
+  detect({ data, graphName }, sensitivity) {
+    const threshold = Math.max(1, Math.floor((1 - sensitivity) * 5));
+    const missing = data.nodes.filter((n) =>
+      !n.properties.source && !n.properties.source_date && !n.properties.sourceDate
+    );
+    if (missing.length < threshold) return [];
+
+    const labels = listLabels(missing, 4);
+    return [{
+      id: makeSignalId("missing_provenance", graphName),
+      kind: "missing_provenance",
+      category: "structural",
+      severity: missing.length > data.nodes.length * 0.5 ? "high" : "medium",
+      title: `${missing.length} nodes have no source information`,
+      description: `${labels} and ${missing.length > 4 ? missing.length - 4 + " others have" : "have"} no source or date recorded. Facts without provenance can't be verified or refreshed. When mining, use a URL or document reference as the source.`,
+      evidenceNodeIds: missing.map((n) => n.id),
+      evidenceDocIds: [],
+      graphNames: [graphName],
+      score: missing.length * 1.5,
+      tags: [],
+    }];
+  },
+};
+
+export const sourceConcentrationDetector: CrossCuttingSignalDetector = {
+  kind: "source_concentration",
+  category: "structural",
+  detect({ graphs }, _sensitivity, params) {
+    const threshold = (params?.threshold as number) ?? 0.8;
+    const signals: Signal[] = [];
+
+    for (const { data, graphName } of graphs) {
+      if (data.nodes.length < 10) continue;
+
+      const domainCounts = new Map<string, number>();
+      for (const n of data.nodes) {
+        const src = String(n.properties.source ?? "");
+        if (!src) continue;
+        const domain = (() => { try { return src.startsWith("http") ? new URL(src).hostname || src : src; } catch { return src; } })();
+        domainCounts.set(domain, (domainCounts.get(domain) ?? 0) + 1);
+      }
+
+      const nodesWithSource = [...domainCounts.values()].reduce((a, b) => a + b, 0);
+      if (nodesWithSource < 5) continue;
+
+      for (const [domain, count] of domainCounts) {
+        const fraction = count / nodesWithSource;
+        if (fraction < threshold) continue;
+        signals.push({
+          id: makeSignalId("source_concentration", graphName, domain),
+          kind: "source_concentration",
+          category: "structural",
+          severity: fraction > 0.9 ? "high" : "medium",
+          title: `${Math.round(fraction * 100)}% of "${graphName}" comes from ${domain}`,
+          description: `${count} of ${nodesWithSource} sourced nodes come exclusively from ${domain}. A single-source graph is fragile — if that source changes or disappears, your knowledge becomes unverifiable. Consider adding nodes from alternative sources.`,
+          evidenceNodeIds: data.nodes.filter((n) => String(n.properties.source ?? "").includes(domain)).map((n) => n.id).slice(0, 20),
+          evidenceDocIds: [],
+          graphNames: [graphName],
+          score: fraction * 10,
+          tags: [],
+        });
+      }
+    }
+
+    return signals;
+  },
+};
+
 export const GRAPH_DETECTORS: GraphSignalDetector[] = [
   typeRatioDetector,
   missingRelationshipsDetector,
   propertyCompletenessDetector,
   underconnectedImportantDetector,
   disconnectedIslandsDetector,
+  staleContentDetector,
+  missingProvenanceDetector,
 ];
 
 export const CROSS_CUTTING_DETECTORS: CrossCuttingSignalDetector[] = [
   crossGraphEntityDetector,
   kbGraphGapDetector,
   coverageAsymmetryDetector,
+  sourceConcentrationDetector,
 ];

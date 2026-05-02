@@ -11,7 +11,7 @@ import type { KBDocumentMeta } from "./document-store.js";
 
 // --- Signal kinds ---
 
-/** Structural detectors (no LLM, content-aware graph analysis) */
+/** Built-in structural detectors (file-based, no external dependencies) */
 export type StructuralSignalKind =
   | "type_ratio_imbalance"
   | "missing_relationships"
@@ -20,7 +20,10 @@ export type StructuralSignalKind =
   | "disconnected_island"
   | "cross_graph_entity"
   | "kb_graph_gap"
-  | "coverage_asymmetry";
+  | "coverage_asymmetry"
+  | "stale_content"
+  | "missing_provenance"
+  | "source_concentration";
 
 /** Semantic detectors (LLM-based, v2 placeholder) */
 export type SemanticSignalKind =
@@ -28,7 +31,12 @@ export type SemanticSignalKind =
   | "buried_actionable"
   | "cross_graph_pattern";
 
-export type SignalKind = StructuralSignalKind | SemanticSignalKind;
+/**
+ * Open signal kind — allows connectors and user-defined detectors to register
+ * arbitrary kinds (e.g. "connector.type_drift", "custom.my_detector") without
+ * modifying this file. Known kinds are listed above for IDE autocomplete.
+ */
+export type SignalKind = StructuralSignalKind | SemanticSignalKind | (string & {});
 
 export type SignalCategory = "structural" | "semantic";
 
@@ -79,6 +87,30 @@ export const DEFAULT_SIGNAL_CONFIG: SignalConfig = {
   disabledKinds: [],
 };
 
+/**
+ * Per-detector user preferences — lives in ~/.config/backpack/signals.json.
+ * Separate from the per-backpack signal store so preferences apply across
+ * all backpacks.
+ */
+export interface DetectorUserConfig {
+  enabled?: boolean;
+  sensitivity?: number;
+  params?: Record<string, unknown>;
+}
+
+export interface GlobalSignalConfig {
+  global?: {
+    sensitivity?: number;
+    maxSignals?: number;
+  };
+  detectors?: Record<string, DetectorUserConfig>;
+}
+
+export const DEFAULT_GLOBAL_SIGNAL_CONFIG: GlobalSignalConfig = {
+  global: { sensitivity: 0.5, maxSignals: 50 },
+  detectors: {},
+};
+
 // --- Detector interface ---
 
 /** Input bundle for per-graph detectors. */
@@ -97,14 +129,14 @@ export interface CrossCuttingDetectorInput {
 export interface GraphSignalDetector {
   kind: SignalKind;
   category: SignalCategory;
-  detect(input: GraphDetectorInput, sensitivity: number): Signal[];
+  detect(input: GraphDetectorInput, sensitivity: number, params?: Record<string, unknown>): Signal[];
 }
 
 /** A cross-cutting detector: runs across all graphs + KB docs. */
 export interface CrossCuttingSignalDetector {
   kind: SignalKind;
   category: SignalCategory;
-  detect(input: CrossCuttingDetectorInput, sensitivity: number): Signal[];
+  detect(input: CrossCuttingDetectorInput, sensitivity: number, params?: Record<string, unknown>): Signal[];
 }
 
 // --- Result ---

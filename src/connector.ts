@@ -26,7 +26,7 @@ export {
 
 export type { Node, Edge, LearningGraphData, LearningGraphMetadata } from "./core/types.js";
 
-export { dataDir } from "./core/paths.js";
+export { dataDir, signalConfigFile } from "./core/paths.js";
 
 // Re-export McpServer so downstream packages (like backpack-connector) can import
 // the type from one place without duplicating the @modelcontextprotocol/sdk dep.
@@ -38,3 +38,5 @@ export {
 } from "./core/backpacks-registry.js";
 
 export type { BackpackEntry } from "./core/backpacks-registry.js";
+
+export type { Signal, SignalKind, SignalSeverity, GlobalSignalConfig, DetectorUserConfig } from "./core/signal-types.js";

@@ -19,9 +19,11 @@ import type {
   SignalKind,
   GraphDetectorInput,
   CrossCuttingDetectorInput,
+  GlobalSignalConfig,
 } from "./signal-types.js";
 import { DEFAULT_SIGNAL_CONFIG } from "./signal-types.js";
 import { GRAPH_DETECTORS, CROSS_CUTTING_DETECTORS } from "./signal-detectors.js";
+import { signalConfigFile } from "./paths.js";
 
 export class SignalStore {
   private filePath: string;
@@ -87,6 +89,39 @@ export class SignalStore {
     };
   }
 
+  // --- Global config ---
+
+  async loadGlobalConfig(): Promise<GlobalSignalConfig> {
+    try {
+      const raw = await fs.readFile(signalConfigFile(), "utf8");
+      return JSON.parse(raw) as GlobalSignalConfig;
+    } catch {
+      return {};
+    }
+  }
+
+  async saveGlobalConfig(config: GlobalSignalConfig): Promise<void> {
+    await fs.mkdir(path.dirname(signalConfigFile()), { recursive: true });
+    await fs.writeFile(signalConfigFile(), JSON.stringify(config, null, 2), "utf8");
+  }
+
+  // --- Merge external signals (written by connectors or user-defined detectors) ---
+
+  async mergeExternalSignals(signals: Signal[]): Promise<void> {
+    const file = await this.load();
+    const existingIds = new Set(file.signals.map((s) => s.id));
+    // Deduplicate within the incoming array (last-write-wins by ID)
+    const deduped = signals.filter((s, i) => signals.findIndex((x) => x.id === s.id) === i);
+    const incoming = deduped.filter((s) => !existingIds.has(s.id));
+    const updated = file.signals.map((existing) => {
+      const replacement = deduped.find((s) => s.id === existing.id);
+      return replacement ?? existing;
+    });
+    file.signals = [...updated, ...incoming];
+    file.computedAt = new Date().toISOString();
+    await this.save(file);
+  }
+
   // --- Detect ---
 
   async detect(
@@ -94,36 +129,50 @@ export class SignalStore {
     docs: KBDocumentMeta[],
   ): Promise<SignalResult> {
     const file = await this.load();
+    const globalCfg = await this.loadGlobalConfig();
     const config = file.config ?? { ...DEFAULT_SIGNAL_CONFIG };
-    const { sensitivity, disabledKinds } = config;
+    const effectiveSensitivity = globalCfg.global?.sensitivity ?? config.sensitivity;
+    const { disabledKinds } = config;
+
+    const isEnabled = (kind: string): boolean => {
+      if (disabledKinds.includes(kind as SignalKind)) return false;
+      const detectorCfg = globalCfg.detectors?.[kind];
+      return detectorCfg?.enabled !== false;
+    };
+
+    const sensitivityFor = (kind: string): number => {
+      return globalCfg.detectors?.[kind]?.sensitivity ?? effectiveSensitivity;
+    };
+
+
 
     const allSignals: Signal[] = [];
 
-    // Per-graph detectors
     for (const { name, data } of graphs) {
       const input: GraphDetectorInput = { data, graphName: name };
       for (const detector of GRAPH_DETECTORS) {
-        if (disabledKinds.includes(detector.kind)) continue;
-        allSignals.push(...detector.detect(input, sensitivity));
+        if (!isEnabled(detector.kind)) continue;
+        const params = globalCfg.detectors?.[detector.kind]?.params;
+        allSignals.push(...detector.detect(input, sensitivityFor(detector.kind), params));
       }
     }
 
-    // Cross-cutting detectors
     const crossInput: CrossCuttingDetectorInput = {
       graphs: graphs.map(({ name, data }) => ({ data, graphName: name })),
       docs,
     };
     for (const detector of CROSS_CUTTING_DETECTORS) {
-      if (disabledKinds.includes(detector.kind)) continue;
-      allSignals.push(...detector.detect(crossInput, sensitivity));
+      if (!isEnabled(detector.kind)) continue;
+      const params = globalCfg.detectors?.[detector.kind]?.params;
+      allSignals.push(...detector.detect(crossInput, sensitivityFor(detector.kind), params));
     }
 
-    // Enrich signals with tags derived from graph nodes and KB docs
+    const maxSignals = globalCfg.global?.maxSignals ?? 50;
+
     this.enrichTags(allSignals, graphs, docs);
 
-    // Preserve dismissed list, write new signals
     const newFile: SignalFile = {
-      signals: allSignals,
+      signals: allSignals.slice(0, maxSignals),
       dismissed: file.dismissed,
       config,
       computedAt: new Date().toISOString(),

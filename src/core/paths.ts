@@ -30,3 +30,7 @@ export function dataDir(): string {
 export function configFile(): string {
   return path.join(configDir(), "config.json");
 }
+
+export function signalConfigFile(): string {
+  return path.join(configDir(), "signals.json");
+}
