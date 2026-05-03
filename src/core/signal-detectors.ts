@@ -473,7 +473,7 @@ export const crossGraphEntityDetector: CrossCuttingSignalDetector = {
         category: "structural",
         severity: uniqueGraphs.length >= 3 ? "high" : "medium",
         title: `"${displayLabel}" appears across ${uniqueGraphs.length} graphs`,
-        description: `"${displayLabel}" exists ${perGraph.join(", ")}. ${types.length > 1 ? `It's typed differently across graphs (${types.join(" vs ")}), which may indicate inconsistent modeling.` : "This entity bridges domains — insights from one graph may apply to the other."}`,
+        description: `"${displayLabel}" exists ${perGraph.join(", ")}. ${types.length > 1 ? `Typed differently (${types.join(" vs ")}) — inconsistent modeling.\n→ Action: Standardize the type and re-run signal detection. Use backpack_update_node to retype.` : `This entity bridges your graphs — insights from one apply to the other.\n→ Action: Use connector_synthesize to view these graphs together and see how this entity connects across domains.`}`,
         evidenceNodeIds: nodeIds,
         evidenceDocIds: [],
         graphNames: uniqueGraphs,
