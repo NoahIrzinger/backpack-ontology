@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.4 (2026-05-04)
+
+### Documentation
+- Added "How this is different" section to README: write-first vs. read-side framing, typed epistemic schema, git discipline, MCP-first design, and relationship to RAG/GraphRAG. Based on competitive research against Zep, Cognee, and Mem0.
+
 ## 0.8.1 (2026-04-28)
 
 Republish of 0.8.0 with comments and example data scrubbed from source. No functional or API changes from 0.8.0; users should pin >= 0.8.1.
