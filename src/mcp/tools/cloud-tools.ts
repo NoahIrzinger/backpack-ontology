@@ -1,52 +1,11 @@
 import * as crypto from "node:crypto";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Backpack } from "../../core/backpack.js";
 import { OAuthClient } from "../../auth/oauth.js";
-import { configDir } from "../../core/paths.js";
 import { trackEvent } from "../../core/telemetry.js";
 import { resolveCloudToken, emailFromToken, getRelayUrl, getClientId, getIssuerUrl } from "../../ops/auth.js";
 export { resolveCloudToken };
-interface CloudContainer {
-    id: string;
-    name: string;
-    color?: string;
-    tags?: string[];
-    origin_kind: string;
-    origin_device_name?: string;
-}
-async function fetchContainers(token: string): Promise<CloudContainer[]> {
-    const res = await fetch(`${getRelayUrl()}/api/sync/backpacks`, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok)
-        throw new Error(`list containers: ${res.status}`);
-    const data = await res.json() as {
-        backpacks?: CloudContainer[];
-    };
-    return data.backpacks ?? [];
-}
-type ResolveResult = {
-    ok: true;
-    container: CloudContainer;
-} | {
-    ok: false;
-    reason: "not_found" | "fetch_failed";
-    error?: string;
-};
-async function resolveContainerByName(token: string, name: string): Promise<ResolveResult> {
-    let all: CloudContainer[];
-    try {
-        all = await fetchContainers(token);
-    }
-    catch (err) {
-        return { ok: false, reason: "fetch_failed", error: (err as Error).message };
-    }
-    const found = all.find((c) => c.name === name);
-    return found ? { ok: true, container: found } : { ok: false, reason: "not_found" };
-}
 export function registerCloudTools(server: McpServer, backpack: Backpack): void {
     server.registerTool("backpack_cloud_login", {
         title: "Sign In to Cloud",
@@ -274,129 +233,44 @@ export function registerCloudTools(server: McpServer, backpack: Backpack): void 
         return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     });
     server.registerTool("backpack_cloud_sync", {
-        title: "Sync to Cloud",
-        description: "Push local graphs to the cloud backpack as plaintext JSON. " +
-            "Specify graphName to sync a single graph, or omit to sync all local graphs. " +
-            "For encrypted sync, use the viewer's Share panel instead. " +
-            "Requires authentication — use backpack_cloud_login first if not signed in.",
+        title: "Sync Graph to Cloud",
+        description: "Push a local graph to the cloud as a private snapshot, making it accessible from any device or the web app. " +
+            "Overwrites any existing cloud copy. Use backpack_share to also create a public link.",
         inputSchema: {
-            graphName: z.string().optional().describe("Name of a specific graph to sync (syncs all if omitted)"),
+            name: z.string().describe("Name of the local graph to sync"),
         },
-    }, async ({ graphName }) => {
+    }, async ({ name }) => {
         trackEvent("tool_call", { tool: "backpack_cloud_sync" });
         const token = await resolveCloudToken();
         if (!token) {
             return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
         }
-        let names: string[];
-        if (graphName) {
-            const exists = await backpack.ontologyExists(graphName);
-            if (!exists) {
-                return { content: [{ type: "text" as const, text: `Local graph "${graphName}" not found.` }] };
-            }
-            names = [graphName];
+        let data: import("../../core/types.js").LearningGraphData;
+        try {
+            data = await backpack.loadOntology(name);
+        } catch {
+            return { content: [{ type: "text" as const, text: `Graph "${name}" not found locally.` }], isError: true };
         }
-        else {
-            const all = await backpack.listOntologies();
-            names = all.map(o => o.name);
-            if (names.length === 0) {
-                return { content: [{ type: "text" as const, text: "No local graphs to sync." }] };
-            }
+        const res = await fetch(`${getRelayUrl()}/api/graphs/${encodeURIComponent(name)}/events`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                name,
+                description: data.metadata?.description ?? "",
+                snapshot: data,
+                events: [],
+            }),
+        });
+        if (!res.ok) {
+            const body = await res.text().catch(() => "");
+            return { content: [{ type: "text" as const, text: `Sync failed (${res.status}): ${body}` }], isError: true };
         }
-        let synced = 0;
-        let failed = 0;
-        const errors: string[] = [];
-        for (const name of names) {
-            try {
-                const data = await backpack.loadOntology(name);
-                const graphJSON = new TextEncoder().encode(JSON.stringify(data));
-                const typeSet = new Set<string>();
-                for (const n of data.nodes ?? [])
-                    typeSet.add(n.type);
-                const checksumBuf = await crypto.subtle.digest("SHA-256", graphJSON.buffer as ArrayBuffer);
-                const checksum = "sha256:" + Array.from(new Uint8Array(checksumBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
-                const headerObj = {
-                    format: "plaintext",
-                    kind: "learning_graph",
-                    created_at: new Date().toISOString(),
-                    backpack_name: name,
-                    checksum,
-                    graph_count: 1,
-                    node_count: data.nodes?.length ?? 0,
-                    edge_count: data.edges?.length ?? 0,
-                    node_types: Array.from(typeSet),
-                };
-                const headerBytes = new TextEncoder().encode(JSON.stringify(headerObj));
-                const headerLenBuf = new ArrayBuffer(4);
-                new DataView(headerLenBuf).setUint32(0, headerBytes.length, false);
-                const envelope = new Uint8Array(4 + 1 + 4 + headerBytes.length + graphJSON.length);
-                let off = 0;
-                envelope.set(new Uint8Array([0x42, 0x50, 0x41, 0x4b]), off);
-                off += 4;
-                envelope[off] = 0x01;
-                off += 1;
-                envelope.set(new Uint8Array(headerLenBuf), off);
-                off += 4;
-                envelope.set(headerBytes, off);
-                off += headerBytes.length;
-                envelope.set(graphJSON, off);
-                const syncHeaders: Record<string, string> = {
-                    "Content-Type": "application/octet-stream",
-                    "Authorization": `Bearer ${token}`,
-                };
-                try {
-                    const osModule = await import("os");
-                    syncHeaders["X-Backpack-Device-Name"] = osModule.hostname();
-                    syncHeaders["X-Backpack-Device-Hostname"] = osModule.hostname();
-                    syncHeaders["X-Backpack-Device-Platform"] = osModule.platform();
-                    const idPath = path.join(configDir(), "machine-id");
-                    let mid: string;
-                    try {
-                        mid = (await fs.readFile(idPath, "utf-8")).trim();
-                    }
-                    catch {
-                        mid = crypto.createHash("sha256").update(osModule.hostname() + osModule.platform()).digest("hex").slice(0, 16);
-                        try {
-                            await fs.mkdir(path.dirname(idPath), { recursive: true });
-                        }
-                        catch { }
-                        await fs.writeFile(idPath, mid, "utf-8");
-                    }
-                    syncHeaders["X-Backpack-Device-Id"] = mid;
-                    const entry = backpack.getActiveBackpackEntry();
-                    if (entry)
-                        syncHeaders["X-Backpack-Source-Name"] = entry.name;
-                }
-                catch { }
-                const res = await fetch(`${getRelayUrl()}/api/graphs/${encodeURIComponent(name)}/sync`, {
-                    method: "PUT",
-                    headers: syncHeaders,
-                    body: envelope,
-                });
-                if (res.ok) {
-                    synced++;
-                }
-                else {
-                    failed++;
-                    const errBody = await res.text().catch(() => "");
-                    errors.push(`${name}: ${res.status} ${errBody}`);
-                }
-            }
-            catch (err) {
-                failed++;
-                errors.push(`${name}: ${(err as Error).message}`);
-            }
-        }
-        const lines = [`Cloud sync complete: ${synced} synced, ${failed} failed (of ${names.length} total).`];
-        if (errors.length > 0) {
-            lines.push("\nErrors:");
-            for (const e of errors)
-                lines.push(`  - ${e}`);
-        }
-        if (synced > 0) {
-            lines.push("\nNote: graphs were synced as plaintext. For encrypted sync, use the viewer's Share panel.");
-        }
-        return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+        return {
+            content: [{ type: "text" as const, text: `Synced "${name}" to cloud. ${data.nodes.length} nodes, ${data.edges.length} edges. Use backpack_cloud_list to see your cloud graphs.` }],
+        };
     });
     server.registerTool("backpack_cloud_refresh", {
         title: "Refresh Cloud Status",
@@ -488,213 +362,6 @@ export function registerCloudTools(server: McpServer, backpack: Backpack): void 
         }
         catch { }
         return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    });
-    server.registerTool("backpack_cloud_containers", {
-        title: "List Cloud Containers",
-        description: "List the user's cloud sync_backpack containers (groupings of graphs). Each container has an origin (cloud-native or device-synced) and holds related graphs and KB docs. Use this to plan moves or before creating a new container.",
-        annotations: { readOnlyHint: true },
-    }, async () => {
-        trackEvent("tool_call", { tool: "backpack_cloud_containers" });
-        const token = await resolveCloudToken();
-        if (!token) {
-            return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
-        }
-        let containers: CloudContainer[];
-        try {
-            containers = await fetchContainers(token);
-        }
-        catch (err) {
-            return { content: [{ type: "text" as const, text: `Failed to list containers: ${(err as Error).message}` }] };
-        }
-        if (containers.length === 0) {
-            return { content: [{ type: "text" as const, text: "No cloud containers yet. Use backpack_cloud_container_create to make one." }] };
-        }
-        const email = emailFromToken(token);
-        const lines: string[] = [`Cloud containers${email ? ` (${email})` : ""}: ${containers.length}\n`];
-        for (const c of containers) {
-            const origin = c.origin_kind === "local"
-                ? `device-synced${c.origin_device_name ? ` from ${c.origin_device_name}` : ""}`
-                : "cloud-native";
-            const tagStr = c.tags && c.tags.length > 0 ? `  tags=[${c.tags.join(", ")}]` : "";
-            lines.push(`- ${c.name}  (${origin})${tagStr}`);
-            lines.push(`  id=${c.id}`);
-        }
-        return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    });
-    server.registerTool("backpack_cloud_container_create", {
-        title: "Create Cloud Container",
-        description: "Create a new cloud-native sync_backpack container to group graphs. Use this when you want a logical grouping (e.g. 'projects', 'client-acme') that doesn't yet exist. Idempotent: if a container with the same name already exists for this user, the existing one is returned.",
-        inputSchema: {
-            name: z.string().describe("Display name for the new container (e.g. 'projects', 'client-acme')"),
-            color: z.string().optional().describe("Hex color for the container's UI dot (defaults to a standard purple)"),
-            tags: z.array(z.string()).optional().describe("Optional tags for filtering"),
-        },
-    }, async ({ name, color, tags }) => {
-        trackEvent("tool_call", { tool: "backpack_cloud_container_create" });
-        const token = await resolveCloudToken();
-        if (!token) {
-            return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
-        }
-        const res = await fetch(`${getRelayUrl()}/api/sync/register`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ name, color, tags: tags ?? [] }),
-        });
-        if (!res.ok) {
-            const body = await res.text().catch(() => "");
-            return { content: [{ type: "text" as const, text: `Failed to create container: ${res.status} ${body}` }] };
-        }
-        const created = await res.json() as CloudContainer;
-        const verb = res.status === 201 ? "Created" : "Container already existed";
-        return { content: [{ type: "text" as const, text: `${verb}: ${created.name} (id=${created.id}, origin=${created.origin_kind})` }] };
-    });
-    server.registerTool("backpack_cloud_container_rename", {
-        title: "Rename Cloud Container",
-        description: "Rename a cloud sync_backpack container. Looks up the container by its current name. Color and tags can also be updated; omitted fields are preserved.",
-        inputSchema: {
-            name: z.string().describe("Current container name"),
-            newName: z.string().optional().describe("New container name"),
-            color: z.string().optional().describe("New color (hex)"),
-            tags: z.array(z.string()).optional().describe("New tags (replaces existing)"),
-        },
-    }, async ({ name, newName, color, tags }) => {
-        trackEvent("tool_call", { tool: "backpack_cloud_container_rename" });
-        const token = await resolveCloudToken();
-        if (!token) {
-            return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
-        }
-        if (!newName && !color && !tags) {
-            return { content: [{ type: "text" as const, text: "Nothing to update — provide newName, color, or tags." }] };
-        }
-        const lookup = await resolveContainerByName(token, name);
-        if (!lookup.ok) {
-            const msg = lookup.reason === "fetch_failed"
-                ? `Failed to look up container "${name}": ${lookup.error ?? "fetch failed"}`
-                : `Container "${name}" not found.`;
-            return { content: [{ type: "text" as const, text: msg }] };
-        }
-        const target = lookup.container;
-        const body: Record<string, unknown> = {};
-        if (newName)
-            body.name = newName;
-        if (color)
-            body.color = color;
-        if (tags)
-            body.tags = tags;
-        const res = await fetch(`${getRelayUrl()}/api/sync/backpacks/${target.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-            const errBody = await res.text().catch(() => "");
-            return { content: [{ type: "text" as const, text: `Rename failed: ${res.status} ${errBody}` }] };
-        }
-        const updated = await res.json() as CloudContainer;
-        return { content: [{ type: "text" as const, text: `Renamed "${name}" → "${updated.name}" (id=${updated.id}).` }] };
-    });
-    server.registerTool("backpack_cloud_container_delete", {
-        title: "Delete Cloud Container",
-        description: "Delete an empty cloud sync_backpack container. The server refuses to delete a container that still has graphs or KB docs — move them out first with backpack_cloud_move_graph / backpack_cloud_move_kb.",
-        inputSchema: {
-            name: z.string().describe("Name of the container to delete"),
-        },
-    }, async ({ name }) => {
-        trackEvent("tool_call", { tool: "backpack_cloud_container_delete" });
-        const token = await resolveCloudToken();
-        if (!token) {
-            return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
-        }
-        const lookup = await resolveContainerByName(token, name);
-        if (!lookup.ok) {
-            const msg = lookup.reason === "fetch_failed"
-                ? `Failed to look up container "${name}": ${lookup.error ?? "fetch failed"}`
-                : `Container "${name}" not found.`;
-            return { content: [{ type: "text" as const, text: msg }] };
-        }
-        const target = lookup.container;
-        const res = await fetch(`${getRelayUrl()}/api/sync/backpacks/${target.id}`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.status === 204) {
-            return { content: [{ type: "text" as const, text: `Deleted container "${name}".` }] };
-        }
-        const errBody = await res.text().catch(() => "");
-        if (res.status === 422) {
-            return { content: [{ type: "text" as const, text: `Cannot delete "${name}": still has graphs or KB docs. Move them out first, then retry.` }] };
-        }
-        return { content: [{ type: "text" as const, text: `Delete failed: ${res.status} ${errBody}` }] };
-    });
-    server.registerTool("backpack_cloud_move_graph", {
-        title: "Move Cloud Graph Between Containers",
-        description: "Move a graph (by name) into a different sync_backpack container. The graph data is unchanged — only its container assignment is updated. Useful for reorganizing graphs into client-, project-, or topic-based containers.",
-        inputSchema: {
-            graphName: z.string().describe("Name of the graph to move"),
-            toContainer: z.string().describe("Name of the destination container"),
-        },
-    }, async ({ graphName, toContainer }) => {
-        trackEvent("tool_call", { tool: "backpack_cloud_move_graph" });
-        const token = await resolveCloudToken();
-        if (!token) {
-            return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
-        }
-        const lookup = await resolveContainerByName(token, toContainer);
-        if (!lookup.ok) {
-            const msg = lookup.reason === "fetch_failed"
-                ? `Failed to look up destination container "${toContainer}": ${lookup.error ?? "fetch failed"}`
-                : `Destination container "${toContainer}" not found. Create it first with backpack_cloud_container_create.`;
-            return { content: [{ type: "text" as const, text: msg }] };
-        }
-        const dest = lookup.container;
-        const res = await fetch(`${getRelayUrl()}/api/sync/backpacks/${dest.id}/move-graph`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ name: graphName }),
-        });
-        if (res.status === 404) {
-            return { content: [{ type: "text" as const, text: `Graph "${graphName}" not found in your cloud account.` }] };
-        }
-        if (!res.ok) {
-            const errBody = await res.text().catch(() => "");
-            return { content: [{ type: "text" as const, text: `Move failed: ${res.status} ${errBody}` }] };
-        }
-        return { content: [{ type: "text" as const, text: `Moved graph "${graphName}" into container "${toContainer}".` }] };
-    });
-    server.registerTool("backpack_cloud_move_kb", {
-        title: "Move Cloud KB Doc Between Containers",
-        description: "Move a KB document (by id) into a different sync_backpack container.",
-        inputSchema: {
-            docId: z.string().describe("KB document id"),
-            toContainer: z.string().describe("Name of the destination container"),
-        },
-    }, async ({ docId, toContainer }) => {
-        trackEvent("tool_call", { tool: "backpack_cloud_move_kb" });
-        const token = await resolveCloudToken();
-        if (!token) {
-            return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
-        }
-        const lookup = await resolveContainerByName(token, toContainer);
-        if (!lookup.ok) {
-            const msg = lookup.reason === "fetch_failed"
-                ? `Failed to look up destination container "${toContainer}": ${lookup.error ?? "fetch failed"}`
-                : `Destination container "${toContainer}" not found.`;
-            return { content: [{ type: "text" as const, text: msg }] };
-        }
-        const dest = lookup.container;
-        const res = await fetch(`${getRelayUrl()}/api/sync/backpacks/${dest.id}/move-kb`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ id: docId }),
-        });
-        if (res.status === 404) {
-            return { content: [{ type: "text" as const, text: `KB doc "${docId}" not found.` }] };
-        }
-        if (!res.ok) {
-            const errBody = await res.text().catch(() => "");
-            return { content: [{ type: "text" as const, text: `Move failed: ${res.status} ${errBody}` }] };
-        }
-        return { content: [{ type: "text" as const, text: `Moved KB doc "${docId}" into container "${toContainer}".` }] };
     });
 }
 export async function countCloudGraphs(): Promise<number> {

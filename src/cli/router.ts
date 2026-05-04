@@ -11,7 +11,6 @@ import { runShow } from "./commands/show.js";
 import { runOpen } from "./commands/open.js";
 import { runSearch } from "./commands/search.js";
 import { runGraphs } from "./commands/graphs.js";
-import { runContainers } from "./commands/containers.js";
 import { runKbs } from "./commands/kbs.js";
 import { runDelete, runRename } from "./commands/mutate.js";
 import { runInit } from "./commands/init.js";
@@ -36,7 +35,6 @@ const COMMANDS: Record<string, Handler> = {
     init: runInit,
     completion: runCompletion,
     graphs: runGraphs, graph: runGraphs,
-    containers: runContainers, container: runContainers,
     kbs: runKbs, kb: runKbs,
 };
 export async function run(rawArgv: string[]): Promise<number> {

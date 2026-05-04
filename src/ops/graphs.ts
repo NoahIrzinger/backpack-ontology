@@ -64,11 +64,7 @@ export async function listGraphs(): Promise<GraphSummary[]> {
     if (!token)
         throw new Error("not signed in — run `bp login` first");
     const rows = await fetchCloudGraphs(token);
-    const wantContainer = (ctx.cloudContainer ?? "").trim();
-    const filtered = wantContainer
-        ? rows.filter((g) => g.sourceBackpack === wantContainer)
-        : rows;
-    return filtered.map((g) => ({
+    return rows.map((g) => ({
         name: g.name,
         description: g.description,
         tags: [],

@@ -1,5 +1,5 @@
 /**
- * Relay client — uploads envelopes to a share relay (backpack-app or self-hosted).
+ * Relay client — share link infrastructure for backpack-app or self-hosted relay.
  *
  * The relay stores opaque ciphertext and returns a share token.
  * The decryption key never leaves the client.
@@ -18,34 +18,6 @@ export interface RelayConfig {
   url: string;
   /** Bearer token for authentication (sender must have an account). */
   token: string | (() => Promise<string>);
-}
-
-/**
- * Sync a BPAK envelope to the relay. The relay stores the latest version.
- */
-export async function syncToRelay(
-  config: RelayConfig,
-  name: string,
-  envelope: Uint8Array,
-): Promise<void> {
-  const accessToken =
-    typeof config.token === "function"
-      ? await config.token()
-      : config.token;
-
-  const res = await fetch(`${config.url}/api/graphs/${encodeURIComponent(name)}/sync`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/octet-stream",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: envelope as unknown as BodyInit,
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Relay sync failed (${res.status}): ${body}`);
-  }
 }
 
 /**

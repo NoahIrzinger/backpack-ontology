@@ -1,12 +1,11 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { configDir } from "../core/paths.js";
-import { resolveCloudToken, getRelayUrl, assertSafeRelay } from "./auth.js";
+import { resolveCloudToken } from "./auth.js";
 export type ContextSource = "local" | "cloud";
 export interface CliContext {
     source: ContextSource;
     backpackPath?: string;
-    cloudContainer?: string;
 }
 interface NamedContext extends CliContext {
     name: string;
@@ -26,7 +25,6 @@ export async function getContext(): Promise<CliContext> {
             return {
                 source: parsed.source,
                 backpackPath: parsed.backpackPath,
-                cloudContainer: parsed.cloudContainer,
             };
         }
     }
@@ -76,29 +74,6 @@ async function readAllLocalBackpacks(): Promise<{
         return [];
     }
 }
-interface CloudContainerSummary {
-    id: string;
-    name: string;
-    origin_kind: string;
-    origin_device_name?: string;
-}
-async function readCloudContainers(token: string): Promise<CloudContainerSummary[]> {
-    try {
-        assertSafeRelay(getRelayUrl());
-        const res = await fetch(`${getRelayUrl()}/api/sync/backpacks`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok)
-            return [];
-        const body = await res.json() as {
-            backpacks?: CloudContainerSummary[];
-        };
-        return body.backpacks ?? [];
-    }
-    catch {
-        return [];
-    }
-}
 export async function listContexts(): Promise<NamedContext[]> {
     const out: NamedContext[] = [];
     for (const bp of await readAllLocalBackpacks()) {
@@ -106,12 +81,7 @@ export async function listContexts(): Promise<NamedContext[]> {
     }
     const token = await resolveCloudToken();
     if (token) {
-        for (const c of await readCloudContainers(token)) {
-            const detail = c.origin_kind === "local" && c.origin_device_name
-                ? `device-synced from ${c.origin_device_name}`
-                : "cloud-native";
-            out.push({ name: `cloud:${c.name}`, source: "cloud", cloudContainer: c.name, detail });
-        }
+        out.push({ name: "cloud", source: "cloud", detail: "cloud backpack" });
     }
     return out;
 }
@@ -165,5 +135,5 @@ export function describeContext(ctx: CliContext): string {
     if (ctx.source === "local") {
         return ctx.backpackPath ? `local:${path.basename(ctx.backpackPath)}` : "local";
     }
-    return ctx.cloudContainer ? `cloud:${ctx.cloudContainer}` : "cloud (all containers)";
+    return "cloud";
 }

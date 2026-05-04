@@ -18,7 +18,6 @@ import { registerShareTools } from "./tools/share-tools.js";
 import { registerKBTools } from "./tools/kb-tools.js";
 import { registerCloudTools } from "./tools/cloud-tools.js";
 import { registerSignalTools } from "./tools/signal-tools.js";
-import { registerCloudContainerTools } from "./tools/cloud-container-tools.js";
 import { registerViewerStateResource } from "./viewer-state-resource.js";
 
 /** Configuration for local file-based storage. */
@@ -135,20 +134,11 @@ Signals: after running backpack_signal_detect, automatically enrich the HIGH and
   registerIntelligenceTools(server, backpack);
   registerRemoteTools(server, backpack, remoteRegistry);
   registerShareTools(server, backpack);
-  // Local mode gets path-based backpack folder management + signal
-  // tools (which depend on the local viewer's state) + KB tools
-  // (which read from local-mounted KB folders).
-  // Cloud mode gets the analogous container-management surface
-  // (sync_backpacks) exposed via cloud-container-tools. KB tools
-  // are local-only for now; the cloud KB has its own /api/kb/*
-  // surface that needs a cloud-backed DocumentStore — follow-up.
   if (!config || config.mode === "local") {
     registerBackpackTools(server, backpack);
     registerKBTools(server, backpack);
     registerSignalTools(server, backpack);
     registerCloudTools(server, backpack);
-  } else {
-    registerCloudContainerTools(server, backpack);
   }
 
   // Viewer-state bridge: exposes the local viewer's current selection /

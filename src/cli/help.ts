@@ -23,7 +23,7 @@ const FULL_HELP_SECTIONS: {
     {
         title: "Common",
         commands: [
-            ["bp ls [resource]", "list graphs / containers / kbs in the current scope"],
+            ["bp ls [resource]", "list graphs / kbs in the current scope"],
             ["bp cat <name>", "print a graph as JSON (pipe to jq, sed, etc.)"],
             ["bp show <name>", "human-friendly summary + type histogram"],
             ["bp open <name>", "open the graph in the local viewer"],
@@ -39,7 +39,7 @@ const FULL_HELP_SECTIONS: {
             ["bp logout", "sign out everywhere"],
             ["bp whoami", "show signed-in identity"],
             ["bp where", "show current scope (backpack / container / identity)"],
-            ["bp use <name>", "switch context (local backpack or cloud container)"],
+            ["bp use <name>", "switch context (local backpack or cloud)"],
             ["bp use", "list available contexts"],
         ],
     },
@@ -55,7 +55,6 @@ const FULL_HELP_SECTIONS: {
             ["bp graphs edit <name>", "open in $EDITOR, save back atomically"],
             ["bp graphs rename <old> <new>", "rename in place"],
             ["bp graphs delete <name>", "delete with confirm (or -y)"],
-            ["bp graphs move <name> --to <container>", "relocate between cloud containers"],
         ],
     },
     {
@@ -67,16 +66,6 @@ const FULL_HELP_SECTIONS: {
             ["bp kbs create --title=… --content=…", "create from flags"],
             ["bp kbs edit <id>", "edit body in $EDITOR"],
             ["bp kbs delete <id>", "delete with confirm"],
-            ["bp kbs move <id> --to <container>", "relocate between cloud containers"],
-        ],
-    },
-    {
-        title: "Cloud containers",
-        commands: [
-            ["bp containers list", "list your cloud sync_backpacks"],
-            ["bp containers create <name> [--color=#xxx] [--tags=a,b]", "new cloud container"],
-            ["bp containers rename <old> <new>", "rename / recolor / retag"],
-            ["bp containers delete <name>", "delete (refuses if non-empty)"],
         ],
     },
     {

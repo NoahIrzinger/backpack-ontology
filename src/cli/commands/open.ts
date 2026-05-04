@@ -21,8 +21,7 @@ async function syncViewerContext(): Promise<{
     }
     else if (ctx.source === "cloud") {
         switchName = "__cloud__";
-        label = ctx.cloudContainer ? `cloud:${ctx.cloudContainer}` : "cloud";
-        container = ctx.cloudContainer;
+        label = "cloud";
     }
     if (!switchName) return { ok: false, label: null, error: "no active context" };
     try {

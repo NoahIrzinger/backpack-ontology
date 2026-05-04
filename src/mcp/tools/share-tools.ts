@@ -4,13 +4,12 @@ import { writeFile } from "node:fs/promises";
 import type { Backpack } from "../../core/backpack.js";
 import type { KBDocument } from "../../core/document-store.js";
 import {
-  createEnvelope,
   generateKeyPair,
   encrypt,
   encodeKeyForFragment,
-  syncToRelay,
   createShareLink,
 } from "../../sharing/index.js";
+import { assertSafeRelay } from "../../ops/auth.js";
 
 /**
  * V2 share payload — includes both graph data and KB documents.
@@ -27,99 +26,67 @@ export function registerShareTools(
   server: McpServer,
   backpack: Backpack,
 ): void {
-  // backpack_share — encrypt and upload to a relay
+  // backpack_share — push graph to cloud and return a public share link
   server.registerTool(
     "backpack_share",
     {
-      title: "Share Backpack",
+      title: "Share Graph",
       description:
-        "Encrypt a backpack and upload it to a share relay. Returns a shareable link. " +
-        "The decryption key is embedded in the URL fragment — it never reaches the server. " +
-        "Recipients open the link in a browser and decrypt client-side.",
+        "Upload a local graph to the cloud and return a public share link. " +
+        "The graph is stored plaintext on the server; anyone with the link can view it. " +
+        "Requires a Backpack App account and bearer token.",
       inputSchema: {
-        name: z.string().describe("Name of the backpack to share"),
+        name: z.string().describe("Name of the local graph to share"),
         relayUrl: z
           .string()
           .default("https://app.backpackontology.com")
-          .describe("Share relay URL"),
+          .describe("Backpack App URL"),
         relayToken: z
           .string()
-          .describe("Bearer token for the relay (requires a backpack-app account)"),
-        encrypted: z
-          .boolean()
-          .default(true)
-          .describe("Encrypt the backpack before sharing (default: true)"),
+          .describe("Bearer token (requires a backpack-app account)"),
       },
     },
-    async ({ name, relayUrl, relayToken, encrypted }) => {
+    async ({ name, relayUrl, relayToken }) => {
+      assertSafeRelay(relayUrl);
       const data = await backpack.loadOntology(name);
 
-      // Load KB documents associated with this graph
-      let kbDocs: Array<Omit<KBDocument, "collection">> = [];
-      try {
-        const docs = await backpack.documents();
-        const result = await docs.list();
-        kbDocs = await Promise.all(
-          result.documents
-            .filter((d) => d.sourceGraphs.includes(name))
-            .map(async (d) => {
-              const full = await docs.read(d.id);
-              const { collection: _, ...rest } = full;
-              return rest;
-            }),
-        );
-      } catch {
-        // No KB configured or inaccessible — share graph only
+      const pushRes = await fetch(
+        `${relayUrl}/api/graphs/${encodeURIComponent(name)}/events`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${relayToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            description: data.metadata?.description ?? "",
+            snapshot: data,
+            events: [],
+          }),
+        },
+      );
+
+      if (!pushRes.ok && pushRes.status !== 409) {
+        const body = await pushRes.text().catch(() => "");
+        return {
+          content: [{ type: "text" as const, text: `Failed to push graph to cloud (${pushRes.status}): ${body}` }],
+          isError: true,
+        };
       }
 
-      const shareData: SharePayloadV2 = { version: 2, graph: data, documents: kbDocs };
-      const plaintext = new TextEncoder().encode(JSON.stringify(shareData));
+      const relayConfig = { url: relayUrl, token: relayToken };
+      const result = await createShareLink(relayConfig, name);
 
       const stats = {
         node_count: data.nodes.length,
         edge_count: data.edges.length,
-        node_types: [...new Set(data.nodes.map((n) => n.type))],
-        document_count: kbDocs.length,
       };
 
-      let payload: Uint8Array;
-      let format: "plaintext" | "age-v1";
-      let fragmentKey = "";
-
-      if (encrypted) {
-        const keyPair = await generateKeyPair();
-        payload = await encrypt(plaintext, keyPair.publicKey);
-        format = "age-v1";
-        fragmentKey = encodeKeyForFragment(keyPair.secretKey);
-      } else {
-        payload = plaintext;
-        format = "plaintext";
-      }
-
-      const graphCount = 1;
-      const envelope = await createEnvelope(name, payload, format, graphCount, stats);
-
-      const relayConfig = { url: relayUrl, token: relayToken };
-      await syncToRelay(relayConfig, name, envelope);
-      const result = await createShareLink(relayConfig, name);
-
-      const shareLink = fragmentKey
-        ? `${result.url}#k=${fragmentKey}`
-        : result.url;
-
-      let text = `Shared "${name}" successfully.\n\nShare link: ${shareLink}`;
-      text += `\nGraph stats: ${stats.node_count} nodes, ${stats.edge_count} edges, ${stats.node_types.length} types`;
-      if (stats.document_count > 0) {
-        text += `\nKB documents: ${stats.document_count} included`;
-      }
+      let text = `Shared "${name}" successfully.\n\nShare link: ${result.url}`;
+      text += `\nGraph: ${stats.node_count} nodes, ${stats.edge_count} edges`;
       if (result.expiresAt) {
         text += `\nExpires: ${result.expiresAt}`;
-      }
-      if (encrypted) {
-        text +=
-          "\n\nThe decryption key is in the link fragment (#k=...). " +
-          "The server cannot read your data. " +
-          "Anyone with the full link can view the backpack.";
       }
 
       return { content: [{ type: "text" as const, text }] };
@@ -148,6 +115,7 @@ export function registerShareTools(
       },
     },
     async ({ name, relayUrl, relayToken }) => {
+      assertSafeRelay(relayUrl);
       try {
         const resp = await fetch(
           `${relayUrl}/api/graphs/${encodeURIComponent(name)}`,
@@ -211,33 +179,32 @@ export function registerShareTools(
     },
   );
 
-  // backpack_share_local — export as a .bpak file
+  // backpack_share_local — export as a JSON file for offline sharing
   server.registerTool(
     "backpack_share_local",
     {
-      title: "Export Backpack",
+      title: "Export Graph to File",
       description:
-        "Export a backpack as a .bpak file for offline sharing. " +
-        "Optionally encrypt with age. Send the file by any channel " +
-        "(email, USB, Signal). Recipient decrypts with the secret key.",
+        "Export a graph and its linked KB documents to a local JSON file for offline sharing. " +
+        "Optionally age-encrypt the export. Send the file by any channel " +
+        "(email, USB, Signal). Encrypted exports include the decryption key in the output.",
       inputSchema: {
-        name: z.string().describe("Name of the backpack to export"),
-        output: z.string().describe("Output file path (e.g., ./my-graph.bpak)"),
+        name: z.string().describe("Name of the graph to export"),
+        output: z.string().describe("Output file path (e.g., ./my-graph.json)"),
         encrypted: z
           .boolean()
-          .default(true)
-          .describe("Encrypt the export (default: true)"),
+          .default(false)
+          .describe("Age-encrypt the export (default: false)"),
       },
     },
     async ({ name, output, encrypted }) => {
       const data = await backpack.loadOntology(name);
 
-      // Load KB documents associated with this graph
       let kbDocs: Array<Omit<KBDocument, "collection">> = [];
       try {
         const docs = await backpack.documents();
         const result = await docs.list();
-        const fullDocs = await Promise.all(
+        kbDocs = await Promise.all(
           result.documents
             .filter((d) => d.sourceGraphs.includes(name))
             .map(async (d) => {
@@ -246,7 +213,6 @@ export function registerShareTools(
               return rest;
             }),
         );
-        kbDocs = fullDocs;
       } catch {
         // No KB configured
       }
@@ -254,33 +220,19 @@ export function registerShareTools(
       const shareData: SharePayloadV2 = { version: 2, graph: data, documents: kbDocs };
       const plaintext = new TextEncoder().encode(JSON.stringify(shareData));
 
-      let payload: Uint8Array;
-      let format: "plaintext" | "age-v1";
-      let secretKey = "";
-
-      if (encrypted) {
-        const keyPair = await generateKeyPair();
-        payload = await encrypt(plaintext, keyPair.publicKey);
-        format = "age-v1";
-        secretKey = keyPair.secretKey;
-      } else {
-        payload = plaintext;
-        format = "plaintext";
-      }
-
-      const stats = { document_count: kbDocs.length };
-      const envelope = await createEnvelope(name, payload, format, 1, stats);
-      await writeFile(output, envelope);
-
       let text = `Exported "${name}" to ${output}`;
       if (kbDocs.length > 0) {
         text += ` (includes ${kbDocs.length} KB document${kbDocs.length > 1 ? "s" : ""})`;
       }
+
       if (encrypted) {
-        text += `\n\nSecret key (needed to decrypt):\n${secretKey}`;
-        text +=
-          "\n\nRecipient opens with:\n" +
-          `  backpack import ${output} --key <secret-key>`;
+        const keyPair = await generateKeyPair();
+        const ciphertext = await encrypt(plaintext, keyPair.publicKey);
+        await writeFile(output, ciphertext);
+        text += `\n\nSecret key (needed to decrypt):\n${keyPair.secretKey}`;
+        text += `\n\nEncoded as raw age ciphertext. Decrypt with:\n  age --decrypt -i <key-file> ${output}`;
+      } else {
+        await writeFile(output, plaintext);
       }
 
       return { content: [{ type: "text" as const, text }] };

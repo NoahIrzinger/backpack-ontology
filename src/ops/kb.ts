@@ -73,10 +73,7 @@ export async function listKB(): Promise<KBSummary[]> {
         sourceBackpack: d.sourceBackpack,
         origin: "cloud" as const,
     }));
-    const wantContainer = (ctx.cloudContainer ?? "").trim();
-    return wantContainer
-        ? all.filter((d) => d.sourceBackpack === wantContainer)
-        : all;
+    return all;
 }
 export interface KBDocument extends KBSummary {
     content: string;

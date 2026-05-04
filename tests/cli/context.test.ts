@@ -20,10 +20,9 @@ afterEach(async () => {
 });
 describe("getContext / setContext", () => {
     it("setContext persists and getContext reads back", async () => {
-        await setContext({ source: "cloud", cloudContainer: "projects" });
+        await setContext({ source: "cloud" });
         const got = await getContext();
         expect(got.source).toBe("cloud");
-        expect(got.cloudContainer).toBe("projects");
     });
     it("getContext falls back to active local backpack from registry when no state", async () => {
         const reg = { active: "/some/path", paths: ["/some/path"] };
@@ -32,27 +31,23 @@ describe("getContext / setContext", () => {
         expect(ctx.source).toBe("local");
         expect(ctx.backpackPath).toBe("/some/path");
     });
-    it("getContext falls back to cloud-no-container when nothing else is configured", async () => {
+    it("getContext falls back to cloud when nothing else is configured", async () => {
         const ctx = await getContext();
         expect(ctx.source).toBe("cloud");
-        expect(ctx.cloudContainer).toBeUndefined();
     });
     it("clearContext removes the state file", async () => {
-        await setContext({ source: "cloud", cloudContainer: "x" });
+        await setContext({ source: "cloud" });
         await clearContext();
         const ctx = await getContext();
-        expect(ctx.cloudContainer).toBeUndefined();
+        expect(ctx.source).toBe("cloud");
     });
 });
 describe("describeContext", () => {
     it("formats local with the folder basename", () => {
         expect(describeContext({ source: "local", backpackPath: "/foo/bar" })).toBe("local:bar");
     });
-    it("formats cloud with the container name", () => {
-        expect(describeContext({ source: "cloud", cloudContainer: "my-container" })).toBe("cloud:my-container");
-    });
-    it("formats cloud with no container as 'cloud (all containers)'", () => {
-        expect(describeContext({ source: "cloud" })).toBe("cloud (all containers)");
+    it("formats cloud", () => {
+        expect(describeContext({ source: "cloud" })).toBe("cloud");
     });
 });
 describe("resolveContextName", () => {

@@ -97,10 +97,8 @@ export { initTelemetry, trackEvent, trackTokenSavings, shutdown as shutdownTelem
 // Token estimation
 export { estimateTokens, estimateGraphTokens, computeSavings, formatSavingsFooter } from "./core/token-estimate.js";
 
-// Sharing (envelope format, age encryption, relay client)
+// Sharing (age encryption, relay client)
 export {
-  createEnvelope,
-  parseEnvelope,
   generateKeyPair,
   encrypt,
   decrypt,
@@ -110,8 +108,6 @@ export {
   getShareMeta,
 } from "./sharing/index.js";
 export type {
-  EnvelopeHeader,
-  Envelope,
   KeyPair,
   ShareResult,
   RelayConfig,
@@ -120,38 +116,3 @@ export type {
 // MCP server factory
 export { createMcpServer } from "./mcp/server.js";
 export type { BackpackServerConfig, BackpackLocalConfig, BackpackAppConfig } from "./mcp/server.js";
-
-// Sync Protocol v0.1
-export {
-  SyncClient,
-  SyncRelayClient,
-  SyncVersionConflictError,
-  ARTIFACT_KIND_GRAPH,
-  ARTIFACT_KIND_KB_DOC,
-  SYNC_PROTOCOL_VERSION,
-  hashContent as hashSyncContent,
-  parseArtifactId,
-  readSyncState,
-  writeSyncState,
-  deleteSyncState,
-  isStateInitialized,
-  runStartupSync,
-} from "./sync/index.js";
-export type {
-  SyncClientOptions,
-  RegisterOptions,
-  SyncRelayClientOptions,
-  TokenProvider,
-  ArtifactKind,
-  ArtifactSyncState,
-  BackpackSyncState,
-  ConflictRecord,
-  GraphArtifactContent,
-  KBDocArtifactContent,
-  SyncArtifact,
-  SyncArtifactSummary,
-  SyncBackpack,
-  SyncError,
-  SyncManifest,
-  SyncRunResult,
-} from "./sync/index.js";

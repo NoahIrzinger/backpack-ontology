@@ -1,5 +1,3 @@
-export { createEnvelope, parseEnvelope } from "./envelope.js";
-export type { EnvelopeHeader, Envelope } from "./envelope.js";
 export {
   generateKeyPair,
   encrypt,
@@ -8,5 +6,5 @@ export {
   decodeKeyFromFragment,
 } from "./crypto.js";
 export type { KeyPair } from "./crypto.js";
-export { syncToRelay, createShareLink, downloadFromRelay, getShareMeta } from "./relay.js";
+export { createShareLink, downloadFromRelay, getShareMeta } from "./relay.js";
 export type { ShareResult, RelayConfig } from "./relay.js";
