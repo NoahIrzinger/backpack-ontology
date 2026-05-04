@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.5 (2026-05-04)
+
+### Breaking changes
+- Removed `SyncClient`, `SyncRelayClient`, `readSyncState`, and all sync protocol v0.1 types from the public API. The `src/sync/` module is deleted.
+- `backpack_share` MCP tool now pushes a plaintext snapshot via the event log API instead of building a BPAK envelope. Requires a Backpack App account.
+- `backpack_share_local` exports plain JSON (optionally age-encrypted raw bytes) instead of a `.bpak` container.
+- Removed `createEnvelope`, `parseEnvelope`, `EnvelopeHeader`, `Envelope` from public API (`sharing/envelope.ts` deleted).
+- Removed `bp containers` CLI commands (`bp containers list/create/rename/delete`).
+- Removed cloud-mode container MCP tools (`backpack_cloud_containers`, `backpack_cloud_container_*`, `backpack_cloud_move_graph`, `backpack_cloud_move_kb`, `backpack_cloud_sync` v1).
+
+### New
+- `backpack_cloud_sync`: push a local graph snapshot to the cloud as a private graph using the event log API. Use `backpack_cloud_import` to pull in the other direction.
+
+### Fixed
+- `assertSafeRelay` guard added to `backpack_import_remote` to prevent SSRF via attacker-supplied relay URL.
+- `latestOrdinal` in `backpack_share` event push now uses the maximum ordinal across the batch rather than the last element (correct for unsorted batches).
+
 ## 0.8.4 (2026-05-04)
 
 ### Documentation
