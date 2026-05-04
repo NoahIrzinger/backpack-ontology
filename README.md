@@ -42,6 +42,34 @@ This is where human understanding meets AI-generated knowledge — turning struc
 
 [Backpack Viewer repo](https://github.com/NoahIrzinger/backpack-viewer)
 
+## How this is different
+
+**Most AI memory systems are read-side.** You give the AI your documents, it indexes them, you query. Retrieval-augmented generation (RAG), GraphRAG, vector stores, context injection pipelines — all of these operate on knowledge you already have. The AI retrieves; it doesn't accumulate.
+
+**Backpack inverts that.** The LLM writes typed nodes and edges directly to the graph as it reasons — observations, decisions, relationships, claims. The graph persists across sessions, accumulates over time, and is navigable by future sessions as structured knowledge rather than retrieved text. The AI builds; it doesn't retrieve.
+
+That difference in system shape produces a different kind of memory. Compare:
+
+> *RAG:* "What do my documents say about Acme Corp?"
+>
+> *Backpack:* "Sarah Chen is the primary contact at Acme Corp (Ground Truth), who signed the Q4 contract (Decision Point), which superseded the original NDA-only relationship (SUPERSEDES) because of the enterprise tier upgrade (Justification)."
+
+The second form isn't just more information — it's structured reasoning with epistemic status attached. The AI knows not just that a fact exists, but what kind of claim it is and how it relates to other claims.
+
+### Three things no other agent memory system ships
+
+**Typed epistemic schema.** Node types carry semantic meaning beyond generic "Entity." GroundTruth, Recommendation, Tradeoff, DecisionPoint, SUPERSEDES, JUSTIFIES — the AI records the epistemic status of what it knows, not just the facts. This is the difference between a fact store and a knowledge system.
+
+**Git-like discipline on knowledge.** Branches, snapshots, rollback, diff, lock heartbeat. `backpack_audit_roles` detects type drift. `backpack_normalize` enforces type convergence. Knowledge is treated like source code: auditable, reversible, and conflict-aware.
+
+**MCP-first, no SDK required.** Backpack was designed around MCP as the primary API from day one — not bolted on after. It works identically in Claude Code, Cursor, Windsurf, OpenAI Codex, Cline, Continue, and Zed. The typed graph is the contract between host and store; no SDK lock-in.
+
+### How it relates to RAG and GraphRAG
+
+Backpack doesn't replace retrieval pipelines — it's what you build them on. GraphRAG (Microsoft) derives a knowledge graph from documents and uses it as Q&A plumbing. Backpack is a write-first knowledge store that GraphRAG could query as input: Backpack accumulates the structured reasoning, GraphRAG synthesizes answers over it. They're stackable.
+
+If you need to ask "what do my documents say about X?" — use RAG. If you need "what do I understand about X across months of work, and how did my thinking evolve?" — that's Backpack.
+
 ## Get started
 
 ### Recommended: Backpack App (free cloud account)
