@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.7 (2026-05-06)
+
+### New
+- 5 cloud container management MCP tools so users can ask Claude to reorganize their backpacks without direct DB access:
+  - `backpack_cloud_containers` — list all sync_backpack containers (cloud + per-device) with their IDs, names, origins, and graph counts
+  - `backpack_cloud_container_create` — create a new cloud-origin container
+  - `backpack_cloud_container_rename` — rename a user-owned container
+  - `backpack_cloud_container_delete` — soft-delete a container (with optional cascade to contained graphs); soft-delete is enforced server-side for legal retention
+  - `backpack_cloud_move_graph` — move a graph between containers (e.g. consolidate fragmented per-device backpacks into a single cloud container)
+
 ## 0.8.6 (2026-05-06)
 
 ### New

@@ -363,6 +363,128 @@ export function registerCloudTools(server: McpServer, backpack: Backpack): void 
         catch { }
         return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     });
+
+    server.registerTool("backpack_cloud_containers", {
+        title: "List Cloud Containers",
+        description: "List the user's cloud-side containers (sync_backpacks) with origin (cloud/local) and ID. " +
+            "Use this before moving graphs or creating new containers.",
+        annotations: { readOnlyHint: true },
+    }, async () => {
+        trackEvent("tool_call", { tool: "backpack_cloud_containers" });
+        const token = await resolveCloudToken();
+        if (!token) return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
+        const res = await fetch(`${getRelayUrl()}/api/sync/backpacks`, {
+            headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (!res.ok) return { content: [{ type: "text" as const, text: `Failed to list containers: ${res.status}` }] };
+        const body = await res.json() as { backpacks?: Array<{ id: string; name: string; origin_kind?: string; origin_device_name?: string }> };
+        const containers = body.backpacks ?? [];
+        if (containers.length === 0) return { content: [{ type: "text" as const, text: "No containers yet." }] };
+        const lines = [`${containers.length} container(s):`];
+        for (const c of containers) {
+            const origin = c.origin_kind === "local" ? `local (${c.origin_device_name || "device"})` : "cloud";
+            lines.push(`- ${c.name}  [${origin}]  id=${c.id}`);
+        }
+        return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    });
+
+    server.registerTool("backpack_cloud_container_create", {
+        title: "Create Cloud Container",
+        description: "Create a new cloud-origin container (sync_backpack) to group related graphs. " +
+            "Returns the new container ID for use in backpack_cloud_move_graph.",
+        inputSchema: {
+            name: z.string().describe("Container name (e.g. 'research', 'client-acme'). Must be unique among the user's cloud containers."),
+            color: z.string().optional().describe("Hex color (e.g. '#5b9bd5'). Defaults to a cloud blue."),
+        },
+    }, async ({ name, color }: { name: string; color?: string }) => {
+        trackEvent("tool_call", { tool: "backpack_cloud_container_create" });
+        const token = await resolveCloudToken();
+        if (!token) return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
+        const res = await fetch(`${getRelayUrl()}/api/sync/register`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ name, color: color ?? "" }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({} as { error?: string }));
+            return { content: [{ type: "text" as const, text: `Could not create container: ${body.error || res.status}` }] };
+        }
+        const created = await res.json() as { id: string; name: string };
+        return { content: [{ type: "text" as const, text: `Created container "${created.name}" (id=${created.id}).` }] };
+    });
+
+    server.registerTool("backpack_cloud_container_rename", {
+        title: "Rename Cloud Container",
+        description: "Rename a user-owned cloud container.",
+        inputSchema: {
+            id: z.string().describe("Container UUID. Use backpack_cloud_containers to find it."),
+            newName: z.string().describe("New container name."),
+        },
+    }, async ({ id, newName }: { id: string; newName: string }) => {
+        trackEvent("tool_call", { tool: "backpack_cloud_container_rename" });
+        const token = await resolveCloudToken();
+        if (!token) return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
+        const res = await fetch(`${getRelayUrl()}/api/sync/backpacks/${encodeURIComponent(id)}`, {
+            method: "PATCH",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ name: newName }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({} as { error?: string }));
+            return { content: [{ type: "text" as const, text: `Could not rename: ${body.error || res.status}` }] };
+        }
+        return { content: [{ type: "text" as const, text: `Renamed container to "${newName}".` }] };
+    });
+
+    server.registerTool("backpack_cloud_container_delete", {
+        title: "Delete Cloud Container",
+        description: "Soft-delete a user-owned cloud container. By default, fails if the container holds any " +
+            "live graphs — move them to another container first. Pass cascade=true to also soft-delete the " +
+            "graphs (data is retained for legal compliance, just hidden from listings).",
+        inputSchema: {
+            id: z.string().describe("Container UUID."),
+            cascade: z.boolean().optional().describe("If true, soft-delete contained graphs. Default false."),
+        },
+    }, async ({ id, cascade }: { id: string; cascade?: boolean }) => {
+        trackEvent("tool_call", { tool: "backpack_cloud_container_delete" });
+        const token = await resolveCloudToken();
+        if (!token) return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
+        const url = `${getRelayUrl()}/api/sync/backpacks/${encodeURIComponent(id)}` + (cascade ? "?cascade=true" : "");
+        const res = await fetch(url, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({} as { error?: string }));
+            return { content: [{ type: "text" as const, text: `Could not delete: ${body.error || res.status}` }] };
+        }
+        return { content: [{ type: "text" as const, text: `Deleted container.` }] };
+    });
+
+    server.registerTool("backpack_cloud_move_graph", {
+        title: "Move Cloud Graph to Container",
+        description: "Reassign a cloud graph to a different container (sync_backpack). " +
+            "Both the graph and the destination container must be owned by the user. " +
+            "Use backpack_cloud_list to find graph names and backpack_cloud_containers for IDs.",
+        inputSchema: {
+            graphName: z.string().describe("Graph name (e.g. 'ai-llm-ontology')."),
+            toContainerId: z.string().describe("Destination container UUID."),
+        },
+    }, async ({ graphName, toContainerId }: { graphName: string; toContainerId: string }) => {
+        trackEvent("tool_call", { tool: "backpack_cloud_move_graph" });
+        const token = await resolveCloudToken();
+        if (!token) return { content: [{ type: "text" as const, text: "Not signed in. Use backpack_cloud_login first." }] };
+        const res = await fetch(`${getRelayUrl()}/api/graphs/${encodeURIComponent(graphName)}/move`, {
+            method: "PATCH",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ toSyncBackpackId: toContainerId }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({} as { error?: string }));
+            return { content: [{ type: "text" as const, text: `Could not move "${graphName}": ${body.error || res.status}` }] };
+        }
+        return { content: [{ type: "text" as const, text: `Moved "${graphName}" to container ${toContainerId}.` }] };
+    });
 }
 export async function countCloudGraphs(): Promise<number> {
     try {
