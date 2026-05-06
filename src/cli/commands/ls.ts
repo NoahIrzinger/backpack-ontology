@@ -21,7 +21,7 @@ export async function runLs(args: ParsedArgs): Promise<number> {
     if (ctx.source === "cloud") {
         const token = await resolveCloudToken();
         if (!token) {
-            process.stderr.write(`${yellow("!")} not signed in. run \`bp login\` first to list ${resource}.\n`);
+            process.stderr.write(`${yellow("!")} BACKPACK_TOKEN env var required to list ${resource} from cloud.\n`);
             return 1;
         }
     }

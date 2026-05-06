@@ -3,7 +3,6 @@ import { setColorEnabled } from "./colors.js";
 import { printHint, printFullHelp } from "./help.js";
 import { runVersion } from "./commands/version.js";
 import { runDoctor } from "./commands/doctor.js";
-import { runLogin, runLogout, runWhoami } from "./commands/auth.js";
 import { runWhere, runUse } from "./commands/context.js";
 import { runLs } from "./commands/ls.js";
 import { runCat } from "./commands/cat.js";
@@ -20,9 +19,6 @@ const COMMANDS: Record<string, Handler> = {
     help: async () => { printFullHelp(); return 0; },
     version: async () => runVersion(),
     doctor: runDoctor,
-    login: runLogin,
-    logout: runLogout,
-    whoami: runWhoami,
     where: runWhere,
     use: runUse,
     ls: runLs,

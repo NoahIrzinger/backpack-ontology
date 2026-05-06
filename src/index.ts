@@ -30,7 +30,6 @@ export {
   LOCK_FRESH_MS,
 } from "./storage/event-sourced-backend.js";
 export type { LockInfo } from "./storage/event-sourced-backend.js";
-export { CloudCacheBackend } from "./storage/cloud-cache-backend.js";
 
 // Author name generator (docker-style fallback when BACKPACK_AUTHOR is unset)
 export { generateAuthorName, resolveAuthorName } from "./core/author-name.js";
@@ -96,22 +95,6 @@ export { initTelemetry, trackEvent, trackTokenSavings, shutdown as shutdownTelem
 
 // Token estimation
 export { estimateTokens, estimateGraphTokens, computeSavings, formatSavingsFooter } from "./core/token-estimate.js";
-
-// Sharing (age encryption, relay client)
-export {
-  generateKeyPair,
-  encrypt,
-  decrypt,
-  encodeKeyForFragment,
-  decodeKeyFromFragment,
-  downloadFromRelay,
-  getShareMeta,
-} from "./sharing/index.js";
-export type {
-  KeyPair,
-  ShareResult,
-  RelayConfig,
-} from "./sharing/index.js";
 
 // MCP server factory
 export { createMcpServer } from "./mcp/server.js";

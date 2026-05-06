@@ -33,14 +33,11 @@ const FULL_HELP_SECTIONS: {
         ],
     },
     {
-        title: "Auth & scope",
+        title: "Scope",
         commands: [
-            ["bp login", "sign in to backpack-app via the browser"],
-            ["bp logout", "sign out everywhere"],
-            ["bp whoami", "show signed-in identity"],
-            ["bp where", "show current scope (backpack / container / identity)"],
-            ["bp use <name>", "switch context (local backpack or cloud)"],
-            ["bp use", "list available contexts"],
+            ["bp where", "show current scope (local backpack, or cloud if BACKPACK_TOKEN is set)"],
+            ["bp use <name>", "switch active local backpack"],
+            ["bp use", "list available local backpacks"],
         ],
     },
     {

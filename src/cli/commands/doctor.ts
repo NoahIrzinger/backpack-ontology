@@ -1,5 +1,5 @@
 import { ParsedArgs, flagBool } from "../parser.js";
-import { resolveCloudToken, getRelayUrl, emailFromToken, assertSafeRelay } from "../../ops/auth.js";
+import { resolveCloudToken, getRelayUrl, assertSafeRelay } from "../../ops/auth.js";
 import { getContext, describeContext } from "../../ops/context.js";
 import { bold, green, red, yellow } from "../colors.js";
 interface CheckResult {
@@ -18,23 +18,22 @@ export async function runDoctor(args: ParsedArgs): Promise<number> {
     }
     const token = await resolveCloudToken();
     if (token) {
-        const email = emailFromToken(token);
-        checks.push({ name: "auth", ok: true, detail: `signed in${email ? ` as ${email}` : ""}` });
+        checks.push({ name: "auth", ok: true, detail: "BACKPACK_TOKEN set" });
     }
     else {
-        checks.push({ name: "auth", ok: false, detail: "not signed in (run `bp login`)" });
+        checks.push({ name: "auth", ok: true, detail: "no BACKPACK_TOKEN (cloud mode disabled, local-only)" });
     }
     if (token) {
         try {
             assertSafeRelay(getRelayUrl());
-            const res = await fetch(`${getRelayUrl()}/api/sync/backpacks`, {
+            const res = await fetch(`${getRelayUrl()}/api/graphs`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) {
                 checks.push({ name: "cloud", ok: true, detail: `${getRelayUrl()} reachable (HTTP ${res.status})` });
             }
             else if (res.status === 401) {
-                checks.push({ name: "cloud", ok: false, detail: `${getRelayUrl()} rejected token (HTTP 401) — re-run \`bp login\`` });
+                checks.push({ name: "cloud", ok: false, detail: `${getRelayUrl()} rejected token (HTTP 401); BACKPACK_TOKEN may be invalid or expired` });
             }
             else {
                 checks.push({ name: "cloud", ok: false, detail: `${getRelayUrl()} (HTTP ${res.status})` });
@@ -45,7 +44,7 @@ export async function runDoctor(args: ParsedArgs): Promise<number> {
         }
     }
     else {
-        checks.push({ name: "cloud", ok: true, detail: "skipped (not signed in)" });
+        checks.push({ name: "cloud", ok: true, detail: "skipped (BACKPACK_TOKEN not set)" });
     }
     const major = parseInt(process.versions.node.split(".")[0], 10);
     if (major >= 18) {

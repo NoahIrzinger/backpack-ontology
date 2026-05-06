@@ -1,10 +1,8 @@
-import * as crypto from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Backpack } from "../core/backpack.js";
 import { RemoteRegistry } from "../core/remote-registry.js";
 import { JsonFileBackend } from "../storage/json-file-backend.js";
 import { BackpackAppBackend } from "../storage/backpack-app-backend.js";
-import { OAuthClient } from "../auth/oauth.js";
 import { initTelemetry } from "../core/telemetry.js";
 import { PACKAGE_VERSION } from "../core/version.js";
 import { registerOntologyTools, registerDiscoveryAuditTool } from "./tools/ontology-tools.js";
@@ -15,10 +13,9 @@ import { registerVersionTools } from "./tools/version-tools.js";
 import { registerIntelligenceTools } from "./tools/intelligence-tools.js";
 import { registerRemoteTools } from "./tools/remote-tools.js";
 import { registerBackpackTools } from "./tools/backpack-tools.js";
-import { registerShareTools } from "./tools/share-tools.js";
 import { registerKBTools } from "./tools/kb-tools.js";
-import { registerCloudTools } from "./tools/cloud-tools.js";
 import { registerSignalTools } from "./tools/signal-tools.js";
+import { registerMoveTools } from "./tools/move-tools.js";
 import { registerServerInfoTools } from "./tools/server-info-tools.js";
 import { registerViewerStateResource } from "./viewer-state-resource.js";
 
@@ -28,22 +25,13 @@ export interface BackpackLocalConfig {
   dataDir?: string;
 }
 
-/** Configuration for Backpack App with a static token. */
-export interface BackpackAppTokenConfig {
+/** Configuration for Backpack App via static bearer token. */
+export interface BackpackAppConfig {
   mode: "app";
   url: string;
   token: string;
 }
 
-/** Configuration for Backpack App with OAuth2/OIDC SSO. */
-export interface BackpackAppOAuthConfig {
-  mode: "app";
-  url: string;
-  clientId: string;
-  issuerUrl: string;
-}
-
-export type BackpackAppConfig = BackpackAppTokenConfig | BackpackAppOAuthConfig;
 export type BackpackServerConfig = BackpackLocalConfig | BackpackAppConfig;
 
 /**
@@ -51,7 +39,7 @@ export type BackpackServerConfig = BackpackLocalConfig | BackpackAppConfig;
  *
  * Supports two modes:
  *   - "local" (default): JSON files on disk
- *   - "app": Backpack App cloud API (via static token or OAuth2 SSO)
+ *   - "app": thin client for Backpack App via static bearer token
  */
 export async function createMcpServer(
   config?: BackpackServerConfig
@@ -59,29 +47,18 @@ export async function createMcpServer(
   let backpack: Backpack;
 
   if (!config || config.mode === "local") {
-    // Local mode: resolve the active backpack from the registry. First
+    // Local mode resolves the active backpack from the registry. First
     // run seeds a default "personal" entry pointing at the user's
     // existing graphs directory, so upgrades from 0.3.x are transparent.
-    // A custom `config.dataDir` is honored only when explicitly passed —
+    // A custom `config.dataDir` is honored only when explicitly passed,
     // mostly used by tests. Normal users go through the registry.
     if (config?.dataDir) {
       backpack = new Backpack(new JsonFileBackend(config.dataDir));
     } else {
       backpack = await Backpack.fromActiveBackpack();
     }
-  } else if ("token" in config) {
-    backpack = new Backpack(new BackpackAppBackend(config.url, config.token));
   } else {
-    // OAuth2 SSO — opens browser on first run, caches tokens
-    const cacheKey = crypto
-      .createHash("sha256")
-      .update(config.url)
-      .digest("hex")
-      .slice(0, 12);
-    const oauth = new OAuthClient(config.clientId, config.issuerUrl, cacheKey);
-    backpack = new Backpack(
-      new BackpackAppBackend(config.url, () => oauth.getAccessToken()),
-    );
+    backpack = new Backpack(new BackpackAppBackend(config.url, config.token));
   }
 
   await backpack.initialize();
@@ -117,10 +94,6 @@ Signals: after running backpack_signal_detect, automatically enrich the HIGH and
     }
   );
 
-  // The remote graph registry lives parallel to the local storage. It only
-  // matters when running against the local file backend (cloud users get
-  // their remotes via the cloud backend's own subscription model in the
-  // future). For now we always create one — it's cheap.
   const remoteRegistry = new RemoteRegistry(
     config && config.mode === "local" ? config.dataDir : undefined,
   );
@@ -136,18 +109,17 @@ Signals: after running backpack_signal_detect, automatically enrich the HIGH and
   registerVersionTools(server, backpack);
   registerIntelligenceTools(server, backpack);
   registerRemoteTools(server, backpack, remoteRegistry);
-  registerShareTools(server, backpack);
   if (!config || config.mode === "local") {
     registerBackpackTools(server, backpack);
     registerKBTools(server, backpack);
     registerSignalTools(server, backpack);
-    registerCloudTools(server, backpack);
+    registerMoveTools(server, backpack);
   }
 
-  // Viewer-state bridge: exposes the local viewer's current selection /
-  // focus / active graph as an MCP resource so any MCP client can ask
+  // Viewer-state bridge exposes the local viewer's current selection,
+  // focus, and active graph as an MCP resource so any MCP client can ask
   // "what is the user looking at?" without re-typing context. Local mode
-  // only — cloud mode has no local viewer process.
+  // only; app mode has no local viewer process.
   if (!config || config.mode === "local") {
     registerViewerStateResource(server);
   }

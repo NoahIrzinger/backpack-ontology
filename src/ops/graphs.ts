@@ -40,7 +40,7 @@ async function fetchCloudGraphs(token: string): Promise<CloudGraphRow[]> {
     });
     if (!res.ok) {
         if (res.status === 401)
-            throw new Error("cloud session expired — run `bp login` to refresh");
+            throw new Error("cloud rejected BACKPACK_TOKEN (HTTP 401); token may be invalid or expired");
         throw new Error(`cloud /api/graphs returned HTTP ${res.status}`);
     }
     const body = await res.json();
@@ -62,7 +62,7 @@ export async function listGraphs(): Promise<GraphSummary[]> {
     }
     const token = await resolveCloudToken();
     if (!token)
-        throw new Error("not signed in — run `bp login` first");
+        throw new Error("BACKPACK_TOKEN env var required for cloud operations");
     const rows = await fetchCloudGraphs(token);
     return rows.map((g) => ({
         name: g.name,
@@ -100,7 +100,7 @@ export async function getGraph(name: string): Promise<GraphFetchResult> {
     }
     const token = await resolveCloudToken();
     if (!token)
-        throw new Error("not signed in — run `bp login` first");
+        throw new Error("BACKPACK_TOKEN env var required for cloud operations");
     assertSafeRelay(getRelayUrl());
     const res = await fetch(`${getRelayUrl()}/api/graphs/${encodeURIComponent(name)}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -109,7 +109,7 @@ export async function getGraph(name: string): Promise<GraphFetchResult> {
         return { kind: "missing" };
     if (!res.ok) {
         if (res.status === 401)
-            throw new Error("cloud session expired — run `bp login` to refresh");
+            throw new Error("cloud rejected BACKPACK_TOKEN (HTTP 401); token may be invalid or expired");
         throw new Error(`cloud /api/graphs/${name} returned HTTP ${res.status}`);
     }
     const data = await res.json();
@@ -132,7 +132,7 @@ export async function createGraph(name: string, opts: {
     }
     const token = await resolveCloudToken();
     if (!token)
-        throw new Error("not signed in — run `bp login` first");
+        throw new Error("BACKPACK_TOKEN env var required for cloud operations");
     assertSafeRelay(getRelayUrl());
     const now = new Date().toISOString();
     const empty = {
@@ -147,7 +147,7 @@ export async function createGraph(name: string, opts: {
     });
     if (!res.ok) {
         if (res.status === 401)
-            throw new Error("cloud session expired — run `bp login` to refresh");
+            throw new Error("cloud rejected BACKPACK_TOKEN (HTTP 401); token may be invalid or expired");
         throw new Error(`cloud create returned HTTP ${res.status}`);
     }
 }
@@ -160,7 +160,7 @@ export async function deleteGraph(name: string): Promise<void> {
     }
     const token = await resolveCloudToken();
     if (!token)
-        throw new Error("not signed in — run `bp login` first");
+        throw new Error("BACKPACK_TOKEN env var required for cloud operations");
     assertSafeRelay(getRelayUrl());
     const res = await fetch(`${getRelayUrl()}/api/graphs/${encodeURIComponent(name)}`, {
         method: "DELETE",
@@ -170,7 +170,7 @@ export async function deleteGraph(name: string): Promise<void> {
         throw new Error(`graph "${name}" not found in the current scope`);
     if (!res.ok) {
         if (res.status === 401)
-            throw new Error("cloud session expired — run `bp login` to refresh");
+            throw new Error("cloud rejected BACKPACK_TOKEN (HTTP 401); token may be invalid or expired");
         throw new Error(`cloud delete returned HTTP ${res.status}`);
     }
 }
@@ -183,7 +183,7 @@ export async function renameGraph(oldName: string, newName: string): Promise<voi
     }
     const token = await resolveCloudToken();
     if (!token)
-        throw new Error("not signed in — run `bp login` first");
+        throw new Error("BACKPACK_TOKEN env var required for cloud operations");
     assertSafeRelay(getRelayUrl());
     const res = await fetch(`${getRelayUrl()}/api/graphs/${encodeURIComponent(oldName)}/rename`, {
         method: "POST",
@@ -194,7 +194,7 @@ export async function renameGraph(oldName: string, newName: string): Promise<voi
         throw new Error(`graph "${oldName}" not found in the current scope`);
     if (!res.ok) {
         if (res.status === 401)
-            throw new Error("cloud session expired — run `bp login` to refresh");
+            throw new Error("cloud rejected BACKPACK_TOKEN (HTTP 401); token may be invalid or expired");
         if (res.status === 409)
             throw new Error(`a graph named "${newName}" already exists`);
         throw new Error(`cloud rename returned HTTP ${res.status}`);
@@ -217,7 +217,7 @@ export async function applyGraph(name: string, data: LearningGraphData): Promise
     }
     const token = await resolveCloudToken();
     if (!token)
-        throw new Error("not signed in — run `bp login` first");
+        throw new Error("BACKPACK_TOKEN env var required for cloud operations");
     assertSafeRelay(getRelayUrl());
     const res = await fetch(`${getRelayUrl()}/api/graphs/${encodeURIComponent(name)}`, {
         method: "PUT",
@@ -226,7 +226,7 @@ export async function applyGraph(name: string, data: LearningGraphData): Promise
     });
     if (!res.ok) {
         if (res.status === 401)
-            throw new Error("cloud session expired — run `bp login` to refresh");
+            throw new Error("cloud rejected BACKPACK_TOKEN (HTTP 401); token may be invalid or expired");
         throw new Error(`cloud apply returned HTTP ${res.status}`);
     }
     return { created: false };

@@ -3,7 +3,6 @@ import { runLs } from "./ls.js";
 import { runCat } from "./cat.js";
 import { runShow } from "./show.js";
 import { runCreate, runDelete, runRename, runApply, runEdit } from "./mutate.js";
-import { runMoveGraph } from "./cloud-admin.js";
 import { getGraphSummary } from "../../ops/graphs.js";
 export async function runGraphs(args: ParsedArgs): Promise<number> {
     const verb = args.positional[0];
@@ -36,9 +35,6 @@ export async function runGraphs(args: ParsedArgs): Promise<number> {
             return runApply(sub);
         case "edit":
             return runEdit(sub);
-        case "move":
-        case "mv-to":
-            return runMoveGraph(sub);
         default: {
             const couldBeName = args.positional.length === 1 && verb && !verb.startsWith("-");
             if (couldBeName) {

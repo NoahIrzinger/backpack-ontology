@@ -1,5 +1,55 @@
 # Changelog
 
+## 1.0.0 (2026-05-06)
+
+OSS goes local-only. Cloud sync, share-link encryption, browser-based OAuth, and the persistent `bp login` flow are removed. The package now serves two audiences cleanly: developers running it as a personal local graph engine, and headless automation hitting BackpackApp via static bearer tokens. The half-and-half hybrid is gone.
+
+### Breaking changes
+
+**Removed MCP tools** (do not call these any more, they no longer exist):
+- `backpack_cloud_login`, `backpack_cloud_list`, `backpack_cloud_search`, `backpack_cloud_import`, `backpack_cloud_sync`, `backpack_cloud_refresh`, `backpack_cloud_containers`, `backpack_cloud_container_create`, `backpack_cloud_container_rename`, `backpack_cloud_container_delete`, `backpack_cloud_move_graph`
+- `backpack_share`, `backpack_import_remote`, `backpack_share_local` (the entire `share-tools.ts` surface)
+
+**Removed public exports from `backpack-ontology`**:
+- `CloudCacheBackend` (and the `./storage/cloud-cache-backend` path internally)
+- `generateKeyPair`, `encrypt`, `decrypt`, `encodeKeyForFragment`, `decodeKeyFromFragment`, `downloadFromRelay`, `getShareMeta`, `KeyPair`, `ShareResult`, `RelayConfig` (the whole `./sharing` module)
+
+**Removed CLI commands**: `bp login`, `bp logout`, `bp whoami`. The interactive browser-based OAuth flow is gone. Cloud mode is now driven entirely by the `BACKPACK_TOKEN` env var.
+
+**Type-shape changes in `BackpackAppConfig`**: the previous `BackpackAppTokenConfig | BackpackAppOAuthConfig` union collapses to a single static-token shape. `clientId` and `issuerUrl` config fields are no longer accepted by `createMcpServer`.
+
+**Dependency**: removed `age-encryption`. Encrypted shares are no longer supported.
+
+### New
+
+**MCP tools** (replace the deleted cloud tools):
+- `backpack_move_to_cloud(graphName, keepLocal?)` — one-shot push of a local graph to BackpackApp. Local copy deleted by default; `keepLocal: true` keeps it as a frozen archive. Cloud is canonical after move; there is no ongoing sync.
+- `backpack_export_from_cloud(graphName, asLocalName?)` — one-shot pull of a cloud graph as an independent local fork. Edits stay local; no sync back.
+
+Both require `BACKPACK_TOKEN` env var. Both use `BACKPACK_APP_URL` for the relay (defaults to `https://app.backpackontology.com`). Both go through `assertSafeRelay` to refuse non-HTTPS endpoints unless `BACKPACK_INSECURE_RELAY=1`.
+
+**Headless automation**: the `bp` CLI now auto-detects cloud mode from `BACKPACK_TOKEN` env presence. CI/CD pipelines, Jira webhooks, and other server-side scripts can run any `bp` command against BackpackApp's REST API without an interactive auth flow:
+
+```bash
+export BACKPACK_TOKEN=<bearer>
+export BACKPACK_APP_URL=https://app.backpackontology.com
+bp graphs create deploys --description "Deploy events"
+bp graphs apply -f deploy-event.json
+```
+
+When `BACKPACK_TOKEN` is unset, all `bp` commands operate against the local active backpack. There is no persistent login state on disk.
+
+### Migration
+
+- **OSS users with cloud-mounted backpacks**: cloud backpacks are no longer accessible from the OSS viewer or MCP. Access them via BackpackApp directly, or use `backpack_export_from_cloud` for a one-time local snapshot.
+- **OSS users on `bp login` flows**: replace with `BACKPACK_TOKEN` env var. The token format is the same Bearer token BackpackApp issues; you can copy it out of `~/.config/backpack/app-tokens/` or get a fresh one from BackpackApp's API tokens UI.
+- **Personal cross-device sync**: point `BACKPACK_DIR` at a synced folder (Google Drive desktop, iCloud, Dropbox). The OS handles file replication.
+- **Encrypted shares**: no replacement in OSS for 1.0.0. Use BackpackApp's share endpoints if you need shared links with encryption.
+
+### Net code change
+
+~2500 LOC deleted from `src/`, ~270 LOC added (the new move-tools). 12 new tests in `tests/mcp/move-tools.test.ts`. Total test count: 488 → 500, all passing.
+
 ## 0.8.7 (2026-05-06)
 
 ### New

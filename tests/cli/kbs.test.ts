@@ -41,7 +41,7 @@ describe("bp kbs verb routing", () => {
         const code = await run(["kbs", "frobnicate"]);
         err.restore();
         expect(code).toBe(1);
-        expect(err.get()).toContain("list, get, create, edit, delete, or move");
+        expect(err.get()).toContain("list, get, create, edit, or delete");
     });
 });
 describe("bp kbs create argument validation", () => {

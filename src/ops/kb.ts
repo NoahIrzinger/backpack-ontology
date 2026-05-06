@@ -49,7 +49,7 @@ export async function listKB(): Promise<KBSummary[]> {
     }
     const token = await resolveCloudToken();
     if (!token)
-        throw new Error("not signed in — run `bp login` first");
+        throw new Error("BACKPACK_TOKEN env var required for cloud operations");
     assertSafeRelay(getRelayUrl());
     const res = await fetch(`${getRelayUrl()}/api/kb/documents?limit=1000`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -58,7 +58,7 @@ export async function listKB(): Promise<KBSummary[]> {
         if (res.status === 404)
             return [];
         if (res.status === 401)
-            throw new Error("cloud session expired — run `bp login` to refresh");
+            throw new Error("cloud rejected BACKPACK_TOKEN (HTTP 401); token may be invalid or expired");
         throw new Error(`cloud /api/kb/documents returned HTTP ${res.status}`);
     }
     const body = await res.json() as {
@@ -99,7 +99,7 @@ export async function saveKB(input: KBSaveInput): Promise<{
     }
     const token = await resolveCloudToken();
     if (!token)
-        throw new Error("not signed in — run `bp login` first");
+        throw new Error("BACKPACK_TOKEN env var required for cloud operations");
     assertSafeRelay(getRelayUrl());
     const haveId = !!input.id;
     const url = haveId
@@ -118,7 +118,7 @@ export async function saveKB(input: KBSaveInput): Promise<{
     });
     if (!res.ok) {
         if (res.status === 401)
-            throw new Error("cloud session expired — run `bp login` to refresh");
+            throw new Error("cloud rejected BACKPACK_TOKEN (HTTP 401); token may be invalid or expired");
         throw new Error(`cloud KB save returned HTTP ${res.status}`);
     }
     const body = await res.json() as {
@@ -135,7 +135,7 @@ export async function deleteKB(id: string): Promise<void> {
     }
     const token = await resolveCloudToken();
     if (!token)
-        throw new Error("not signed in — run `bp login` first");
+        throw new Error("BACKPACK_TOKEN env var required for cloud operations");
     assertSafeRelay(getRelayUrl());
     const res = await fetch(`${getRelayUrl()}/api/kb/documents/${encodeURIComponent(id)}`, {
         method: "DELETE",
@@ -145,7 +145,7 @@ export async function deleteKB(id: string): Promise<void> {
         throw new Error(`kb doc "${id}" not found`);
     if (!res.ok) {
         if (res.status === 401)
-            throw new Error("cloud session expired — run `bp login` to refresh");
+            throw new Error("cloud rejected BACKPACK_TOKEN (HTTP 401); token may be invalid or expired");
         throw new Error(`cloud KB delete returned HTTP ${res.status}`);
     }
 }
@@ -168,7 +168,7 @@ export async function getKB(id: string): Promise<KBDocument | null> {
     }
     const token = await resolveCloudToken();
     if (!token)
-        throw new Error("not signed in — run `bp login` first");
+        throw new Error("BACKPACK_TOKEN env var required for cloud operations");
     assertSafeRelay(getRelayUrl());
     const res = await fetch(`${getRelayUrl()}/api/kb/documents/${encodeURIComponent(id)}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -177,7 +177,7 @@ export async function getKB(id: string): Promise<KBDocument | null> {
         return null;
     if (!res.ok) {
         if (res.status === 401)
-            throw new Error("cloud session expired — run `bp login` to refresh");
+            throw new Error("cloud rejected BACKPACK_TOKEN (HTTP 401); token may be invalid or expired");
         throw new Error(`cloud /api/kb/documents/${id} returned HTTP ${res.status}`);
     }
     const d = await res.json() as CloudKBRow & {

@@ -35,7 +35,7 @@ describe("run", () => {
         cap.restore();
         expect(code).toBe(0);
         expect(cap.stdout()).toContain("Common");
-        expect(cap.stdout()).toContain("Auth & scope");
+        expect(cap.stdout()).toContain("Scope");
         expect(cap.stdout()).toContain("Global flags");
     });
     it("help command prints full help", async () => {

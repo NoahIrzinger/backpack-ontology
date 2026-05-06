@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { configDir } from "../core/paths.js";
-import { resolveCloudToken } from "./auth.js";
+
 export type ContextSource = "local" | "cloud";
 export interface CliContext {
     source: ContextSource;
@@ -11,61 +11,65 @@ interface NamedContext extends CliContext {
     name: string;
     detail?: string;
 }
+
 function contextFilePath(): string {
     return path.join(configDir(), "cli-context.json");
 }
+
 function backpacksRegistryPath(): string {
     return path.join(configDir(), "backpacks.json");
 }
+
+// Cloud mode is auto-detected from the BACKPACK_TOKEN env var.
+// There is no persistent cloud-context state on disk; users either
+// have BACKPACK_TOKEN set (headless automation against BackpackApp)
+// or operate purely against local backpacks.
 export async function getContext(): Promise<CliContext> {
+    if (process.env.BACKPACK_TOKEN && process.env.BACKPACK_TOKEN.length > 0) {
+        return { source: "cloud" };
+    }
     try {
         const raw = await fs.readFile(contextFilePath(), "utf8");
         const parsed = JSON.parse(raw) as Partial<CliContext>;
-        if (parsed.source === "local" || parsed.source === "cloud") {
-            return {
-                source: parsed.source,
-                backpackPath: parsed.backpackPath,
-            };
+        if (parsed.source === "local" && parsed.backpackPath) {
+            return { source: "local", backpackPath: parsed.backpackPath };
         }
     }
     catch { }
     const local = await readActiveLocalBackpack();
-    if (local) {
-        return { source: "local", backpackPath: local };
-    }
-    return { source: "cloud" };
+    return { source: "local", backpackPath: local ?? undefined };
 }
+
 export async function setContext(ctx: CliContext): Promise<void> {
+    if (ctx.source === "cloud") {
+        throw new Error("cloud context is auto-detected from BACKPACK_TOKEN; cannot be set persistently");
+    }
     await fs.mkdir(path.dirname(contextFilePath()), { recursive: true });
     await fs.writeFile(contextFilePath(), JSON.stringify(ctx, null, 2), "utf8");
 }
+
 export async function clearContext(): Promise<void> {
     try {
         await fs.unlink(contextFilePath());
     }
     catch { }
 }
+
 async function readActiveLocalBackpack(): Promise<string | null> {
     try {
         const raw = await fs.readFile(backpacksRegistryPath(), "utf8");
-        const reg = JSON.parse(raw) as {
-            active?: string;
-        };
+        const reg = JSON.parse(raw) as { active?: string };
         return typeof reg.active === "string" ? reg.active : null;
     }
     catch {
         return null;
     }
 }
-async function readAllLocalBackpacks(): Promise<{
-    name: string;
-    path: string;
-}[]> {
+
+async function readAllLocalBackpacks(): Promise<{ name: string; path: string }[]> {
     try {
         const raw = await fs.readFile(backpacksRegistryPath(), "utf8");
-        const reg = JSON.parse(raw) as {
-            paths?: string[];
-        };
+        const reg = JSON.parse(raw) as { paths?: string[] };
         if (!Array.isArray(reg.paths))
             return [];
         return reg.paths.map((p) => ({ name: path.basename(p), path: p }));
@@ -74,17 +78,15 @@ async function readAllLocalBackpacks(): Promise<{
         return [];
     }
 }
+
 export async function listContexts(): Promise<NamedContext[]> {
     const out: NamedContext[] = [];
     for (const bp of await readAllLocalBackpacks()) {
         out.push({ name: `local:${bp.name}`, source: "local", backpackPath: bp.path, detail: bp.path });
     }
-    const token = await resolveCloudToken();
-    if (token) {
-        out.push({ name: "cloud", source: "cloud", detail: "cloud backpack" });
-    }
     return out;
 }
+
 export type ResolveResult = {
     ctx: NamedContext;
     ambiguous?: never;
@@ -97,6 +99,7 @@ export type ResolveResult = {
     suggestions: string[];
     ambiguous?: never;
 };
+
 export async function resolveContextName(input: string): Promise<ResolveResult> {
     const all = await listContexts();
     const lower = input.toLowerCase();
@@ -120,6 +123,7 @@ export async function resolveContextName(input: string): Promise<ResolveResult> 
         .map((s) => s.name);
     return { ctx: null, suggestions };
 }
+
 function similarityScore(a: string, b: string): number {
     if (a.includes(b))
         return 100 - (a.length - b.length);
@@ -131,9 +135,10 @@ function similarityScore(a: string, b: string): number {
             common++;
     return common;
 }
+
 export function describeContext(ctx: CliContext): string {
-    if (ctx.source === "local") {
-        return ctx.backpackPath ? `local:${path.basename(ctx.backpackPath)}` : "local";
+    if (ctx.source === "cloud") {
+        return "cloud";
     }
-    return "cloud";
+    return ctx.backpackPath ? `local:${path.basename(ctx.backpackPath)}` : "local";
 }

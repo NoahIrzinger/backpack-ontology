@@ -6,7 +6,6 @@ import { ParsedArgs, flagString } from "../parser.js";
 import { runLs } from "./ls.js";
 import { resolveFormat, emitOne } from "../output.js";
 import { getKB, saveKB, deleteKB } from "../../ops/kb.js";
-import { runMoveKB } from "./cloud-admin.js";
 import { confirm } from "../util/confirm.js";
 import { red, green, dim, bold, yellow } from "../colors.js";
 export async function runKbs(args: ParsedArgs): Promise<number> {
@@ -32,11 +31,8 @@ export async function runKbs(args: ParsedArgs): Promise<number> {
             return runKbDelete(sub);
         case "edit":
             return runKbEdit(sub);
-        case "move":
-        case "mv-to":
-            return runMoveKB(sub);
         default:
-            process.stderr.write(`bp kbs: unknown verb "${verb}". try list, get, create, edit, delete, or move.\n`);
+            process.stderr.write(`bp kbs: unknown verb "${verb}". try list, get, create, edit, or delete.\n`);
             return 1;
     }
 }

@@ -1,22 +1,16 @@
 import { ParsedArgs } from "../parser.js";
-import { authStatus } from "../../ops/auth.js";
+import { getRelayUrl } from "../../ops/auth.js";
 import { getContext, setContext, listContexts, resolveContextName, describeContext, } from "../../ops/context.js";
 import { bold, dim, green, red, cyan } from "../colors.js";
 export async function runWhere(): Promise<number> {
     const ctx = await getContext();
-    const auth = await authStatus();
     process.stdout.write(`context: ${bold(describeContext(ctx))}\n`);
     if (ctx.source === "local" && ctx.backpackPath) {
         process.stdout.write(dim(`  path: ${ctx.backpackPath}\n`));
     }
     else if (ctx.source === "cloud") {
-        process.stdout.write(dim(`  endpoint: ${auth.endpoint}\n`));
-    }
-    if (auth.authenticated) {
-        process.stdout.write(dim(`  identity: ${auth.email ?? "(unknown email)"}\n`));
-    }
-    else {
-        process.stdout.write(dim(`  identity: ${dim("not signed in")}\n`));
+        process.stdout.write(dim(`  endpoint: ${getRelayUrl()}\n`));
+        process.stdout.write(dim(`  auth: BACKPACK_TOKEN env var\n`));
     }
     return 0;
 }
@@ -25,7 +19,7 @@ export async function runUse(args: ParsedArgs): Promise<number> {
     if (!target) {
         const all = await listContexts();
         if (all.length === 0) {
-            process.stdout.write(`${dim("no contexts available. register a local backpack or run")} ${bold("bp login")}\n`);
+            process.stdout.write(`${dim("no local backpacks registered. set BACKPACK_TOKEN env var for cloud automation, or register a local backpack.")}\n`);
             return 0;
         }
         const cur = describeContext(await getContext());
