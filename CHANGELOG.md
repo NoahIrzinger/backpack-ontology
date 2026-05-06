@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.6 (2026-05-06)
+
+### New
+- `backpack_version` MCP tool reports the running server's package name, version, mode (`local` vs `app`), MCP SDK version, Node version, and optional host / git SHA from `BACKPACK_SERVER_NAME` / `BACKPACK_SERVER_GIT_SHA` env vars. Lets clients (claude.ai, claude-code, Cursor) diagnose version skew between client expectations and deployed server.
+- `PACKAGE_NAME`, `PACKAGE_VERSION`, `MCP_SDK_VERSION` exported from `src/core/version.ts`. Read from package.json at runtime instead of the previously-hardcoded literal.
+
+### Fixed
+- `serverInfo.version` in MCP `initialize` response was hardcoded to `"0.2.0"` and never updated. Now reads from package.json.
+
 ## 0.8.5 (2026-05-04)
 
 ### Breaking changes

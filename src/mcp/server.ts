@@ -6,6 +6,7 @@ import { JsonFileBackend } from "../storage/json-file-backend.js";
 import { BackpackAppBackend } from "../storage/backpack-app-backend.js";
 import { OAuthClient } from "../auth/oauth.js";
 import { initTelemetry } from "../core/telemetry.js";
+import { PACKAGE_VERSION } from "../core/version.js";
 import { registerOntologyTools, registerDiscoveryAuditTool } from "./tools/ontology-tools.js";
 import { registerNodeTools } from "./tools/node-tools.js";
 import { registerEdgeTools } from "./tools/edge-tools.js";
@@ -18,6 +19,7 @@ import { registerShareTools } from "./tools/share-tools.js";
 import { registerKBTools } from "./tools/kb-tools.js";
 import { registerCloudTools } from "./tools/cloud-tools.js";
 import { registerSignalTools } from "./tools/signal-tools.js";
+import { registerServerInfoTools } from "./tools/server-info-tools.js";
 import { registerViewerStateResource } from "./viewer-state-resource.js";
 
 /** Configuration for local file-based storage. */
@@ -94,7 +96,7 @@ export async function createMcpServer(
   const server = new McpServer(
     {
       name: "backpack",
-      version: "0.2.0",
+      version: PACKAGE_VERSION,
     },
     {
       instructions: `Backpack is the user's persistent knowledge base that carries what matters across conversations. Think of it as a single backpack the user carries everywhere — inside it are learning graphs, each one about a different topic (clients, processes, architecture, etc.).
@@ -125,6 +127,7 @@ Signals: after running backpack_signal_detect, automatically enrich the HIGH and
   await remoteRegistry.initialize();
 
   // Register all tool groups
+  registerServerInfoTools(server, { mode: config?.mode ?? "local" });
   registerOntologyTools(server, backpack);
   registerDiscoveryAuditTool(server);
   registerNodeTools(server, backpack);
