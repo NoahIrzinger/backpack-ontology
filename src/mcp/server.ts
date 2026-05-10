@@ -19,14 +19,24 @@ import { registerMoveTools } from "./tools/move-tools.js";
 import { registerServerInfoTools } from "./tools/server-info-tools.js";
 import { registerViewerStateResource } from "./viewer-state-resource.js";
 
+/** Options shared across server modes. */
+interface BackpackServerOptions {
+  /**
+   * Tool names to skip during registration. Lets callers (e.g. the
+   * paid app's MCP sidecar) suppress specific tools without forking
+   * the package. Unknown names are silently ignored.
+   */
+  excludeTools?: string[];
+}
+
 /** Configuration for local file-based storage. */
-export interface BackpackLocalConfig {
+export interface BackpackLocalConfig extends BackpackServerOptions {
   mode: "local";
   dataDir?: string;
 }
 
 /** Configuration for Backpack App via static bearer token. */
-export interface BackpackAppConfig {
+export interface BackpackAppConfig extends BackpackServerOptions {
   mode: "app";
   url: string;
   token: string;
@@ -99,6 +109,25 @@ Signals: after running backpack_signal_detect, automatically enrich the HIGH and
   );
   await remoteRegistry.initialize();
 
+  // Patch server.registerTool to honor excludeTools. Excluded tool
+  // names become no-ops; unknown names are silently ignored. Lets a
+  // caller hide tools without a fork (e.g. the paid app's sidecar
+  // suppresses Postgres-backed read tools when the cloud KG tools
+  // take over). Restored before return so the server is normal again
+  // for any post-create registrations the caller may want.
+  const excludeSet = new Set(config?.excludeTools ?? []);
+  const serverWithTool = server as unknown as { registerTool: (...args: unknown[]) => unknown };
+  const originalRegisterTool = serverWithTool.registerTool.bind(server);
+  if (excludeSet.size > 0) {
+    serverWithTool.registerTool = (...args: unknown[]) => {
+      const name = args[0];
+      if (typeof name === "string" && excludeSet.has(name)) {
+        return undefined;
+      }
+      return originalRegisterTool(...args);
+    };
+  }
+
   // Register all tool groups
   registerServerInfoTools(server, { mode: config?.mode ?? "local" });
   registerOntologyTools(server, backpack);
@@ -122,6 +151,10 @@ Signals: after running backpack_signal_detect, automatically enrich the HIGH and
   // only; app mode has no local viewer process.
   if (!config || config.mode === "local") {
     registerViewerStateResource(server);
+  }
+
+  if (excludeSet.size > 0) {
+    serverWithTool.registerTool = originalRegisterTool;
   }
 
   return server;
